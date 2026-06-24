@@ -1,0 +1,96 @@
+# Keyboard OSD
+
+[![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
+[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
+[![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.0-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
+
+![GitHub stars](https://img.shields.io/github/stars/mesutakcan/Keyboard-OSD?style=social)
+![GitHub forks](https://img.shields.io/github/forks/mesutakcan/Keyboard-OSD?style=social)
+![GitHub issues](https://img.shields.io/github/issues/mesutakcan/Keyboard-OSD)
+[![Downloads](https://img.shields.io/github/downloads/mesutakcan/Keyboard-OSD/total)](https://github.com/mesutakcan/Keyboard-OSD/releases)
+
+Keyboard OSD is a lightweight Windows utility that displays keyboard input and shortcut combinations on screen in real time. It is designed for presentations, tutorials, screen recordings, and live demonstrations where visible keystrokes make the workflow easier to follow.
+
+![Keyboard OSD demo](docs/ss_keyboard_osd.gif)
+
+## Features
+
+- Shows typed text, special keys, and shortcut combinations as an on-screen display.
+- Groups repeated key presses with a counter.
+- Keeps recent key history on multiple OSD lines.
+- Supports optional word wrapping for typed text.
+- Handles Backspace naturally while typing by removing the last visible character.
+- Supports common modifiers such as Ctrl, Shift, Alt, Win, and AltGr.
+- Uses a click-through overlay so the OSD does not block the active window.
+- Automatically positions the OSD on the monitor that contains the active window.
+- Includes a settings window for colors, font, size, transparency, position, margins, line spacing, and display timing.
+- Saves settings to `settings.ini`.
+
+## Requirements
+
+- Windows
+- For the compiled release: no AutoHotkey installation is required.
+- For running from source: [AutoHotkey v2](https://www.autohotkey.com/) is required.
+
+## Files
+
+- `keyboard-osd.ahk` - main script
+- `settings-gui.ahk` - settings window
+- `CommonDialog.ahk` - color and font dialog helpers
+- `settings.ini` - user settings
+
+## Usage
+
+### Download the compiled version
+
+1. Open the [Releases](https://github.com/mesutakcan/Keyboard-OSD/releases) page.
+2. Download the latest `.exe` file.
+3. Run the executable.
+4. Press keys or shortcuts to see them on screen.
+
+### Run from source
+
+1. Install AutoHotkey v2.
+2. Download or clone this repository.
+3. Run `keyboard-osd.ahk`.
+4. Press keys or shortcuts to see them on screen.
+
+The application runs in the system tray. Right-click the tray icon to open:
+
+- `About` - show application and author information
+- `GitHub Repository` - open the project page
+- `Settings` - edit the OSD appearance and behavior
+- `Reload` - reload the script
+- `Pause OSD` - pause or resume the OSD
+- `Exit` - close the application
+
+## Settings
+
+Most options can be changed from the settings window:
+
+- Text and background colors
+- Background transparency
+- Font family, size, and style
+- Auto width or fixed width
+- Word wrap for typed text
+- Maximum visible lines
+- OSD position and margins
+- Line height and spacing
+- Display duration and dismiss animation timing
+- Modifier key delay
+- History line appearance
+
+After saving settings, the script reloads automatically to apply the changes.
+
+![Keyboard OSD demo](docs/ss_settings.png)
+
+## Notes
+
+- The script is intended for AutoHotkey v2 and will not run correctly on AutoHotkey v1.
+- The OSD follows the active monitor's work area, excluding the taskbar.
+- Some keyboard behavior may depend on the active keyboard layout.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0.
