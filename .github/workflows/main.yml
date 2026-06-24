@@ -1,0 +1,138 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: # Actions sekmesinden manuel çalıştırmayı sağlar
+
+# =================================================================
+# DEĞİŞKENLER
+# =================================================================
+env:
+  AHK_FILE_PATH: "src/keyboard-osd.ahk"
+  ICON_FILE_PATH: "src/app_icon.ico"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+# =================================================================
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      # 1) Repo'yu çek
+      - uses: actions/checkout@v4
+
+      # 2) Hangi Tag için çalışıldığını tespit et
+      - name: Sürüm (Tag) Bilgisini Al
+        id: get_tag
+        shell: pwsh
+        run: |
+          # GitHub'ın sağladığı tag adını alıyoruz (Örn: v1.7 veya refs/tags/v1.7)
+          $ref = "${{ github.ref_name }}"
+          
+          # Eğer manuel tetiklendiyse ve kullanıcı branch seçtiyse uyarı ver
+          if ($ref -eq "main" -or $ref -eq "master") {
+            throw "HATA: Lütfen sol üstteki branch listesinden 'main' yerine exe yüklemek istediğiniz 'TAG' sürümünü (Örn: v1.7) seçerek Run Workflow yapın!"
+          }
+          
+          Write-Host "İşlem yapılan Sürüm (Tag): $ref"
+          echo "TAG_NAME=$ref" >> $env:GITHUB_OUTPUT
+
+      # 3) GitHub'da bu Release daha önce oluşturulmuş mu kontrol et
+      - name: Release Kontrolü
+        id: check_release
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.get_tag.outputs.TAG_NAME }}"
+          $repo = "${{ github.repository }}"
+          $url = "https://api.github.com/repos/$repo/releases/tags/$tag"
+          
+          try {
+            $response = Invoke-WebRequest -Uri $url -Method Get -Headers @{ "Authorization" = "token ${{ secrets.GITHUB_TOKEN }}" } -ErrorAction Stop
+            Write-Host "Release zaten mevcut. Başlık ve açıklama korunacak, sadece dosyalar güncellenir."
+            echo "EXISTS=true" >> $env:GITHUB_OUTPUT
+          } catch {
+            Write-Host "Release henüz bulunamadı. Yeni bir release oluşturulacak."
+            echo "EXISTS=false" >> $env:GITHUB_OUTPUT
+          }
+
+      # 4) AutoHotkey + Ahk2Exe indir
+      - name: AutoHotkey ve Ahk2Exe İndir
+        shell: pwsh
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26.zip" `
+            -OutFile "ahk.zip"
+          Invoke-WebRequest `
+            -Uri "https://github.com/AutoHotkey/Ahk2Exe/releases/download/Ahk2Exe1.1.37.02a0a/Ahk2Exe1.1.37.02a0.zip" `
+            -OutFile "compiler.zip"
+          Expand-Archive ahk.zip -DestinationPath ahk
+          Expand-Archive compiler.zip -DestinationPath ahk
+
+      # 5) Derleme
+      - name: Derleme (x64 ve x32)
+        shell: pwsh
+        run: |
+          $rootDir = Get-Location
+          
+          $ahk_file = Join-Path $rootDir $env:AHK_FILE_PATH
+          $icon_file = Join-Path $rootDir $env:ICON_FILE_PATH
+          $distDir = Join-Path $rootDir "dist"
+          
+          $baseName = [System.IO.Path]::GetFileNameWithoutExtension($ahk_file)
+          $exeName = $baseName -replace " ", "-"
+          $exeName32 = "$exeName-x32.exe"
+          $exeName64 = "$exeName-x64.exe"
+
+          New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+
+          $compiler = Join-Path $rootDir "ahk\Ahk2Exe.exe"
+          $ahk64    = Join-Path $rootDir "ahk\AutoHotkey64.exe"
+          $ahk32    = Join-Path $rootDir "ahk\AutoHotkey32.exe"
+
+          if (!(Test-Path $compiler)) { throw "Ahk2Exe bulunamadı" }
+          if (!(Test-Path $ahk_file)) { throw "Kaynak AHK dosyası bulunamadı: $ahk_file" }
+          if (!(Test-Path $icon_file)) { throw "İkon dosyası bulunamadı: $icon_file" }
+
+          $target64 = Join-Path $distDir $exeName64
+          $target32 = Join-Path $distDir $exeName32
+
+          # x64 Derleme
+          Write-Host "x64 derleniyor..."
+          $p64 = Start-Process -FilePath $compiler -ArgumentList "/in `"$ahk_file`" /base `"$ahk64`" /icon `"$icon_file`" /out `"$target64`"" -Wait -NoNewWindow -PassThru
+          Start-Sleep -Milliseconds 500
+          if (!(Test-Path $target64)) { throw "x64 derleme başarısız!" }
+
+          # x32 Derleme
+          Write-Host "x32 derleniyor..."
+          $p32 = Start-Process -FilePath $compiler -ArgumentList "/in `"$ahk_file`" /base `"$ahk32`" /icon `"$icon_file`" /out `"$target32`"" -Wait -NoNewWindow -PassThru
+          Start-Sleep -Milliseconds 500
+          if (!(Test-Path $target32)) { throw "x32 derleme başarısız!" }
+
+          Get-ChildItem $distDir
+
+      # 6a) SENARYO 1: Release İLK DEFA oluşuyorsa (Otomatik Tag Push veya İlk Elle Oluşturma)
+      - name: Yeni Release Oluştur ve Dosyaları Yükle
+        if: steps.check_release.outputs.EXISTS == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
+          name: ${{ steps.get_tag.outputs.TAG_NAME }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 6b) SENARYO 2: Release ZATEN VARSA (Manuel tekrar tetikleme durumu)
+      - name: Mevcut Release İçeriğini Güncelle (Dosya Ekleme)
+        if: steps.check_release.outputs.EXISTS == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
