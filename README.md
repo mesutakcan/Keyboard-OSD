@@ -93,4 +93,15 @@ After saving settings, the script reloads automatically to apply the changes.
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0.
+This project is licensed under the GPL 3.0 License. For more information, see the `LICENSE` file.
+
+## Contributing
+
+Contributions are welcome! If you'd like to add features, fix bugs, or improve the code, feel free to open a pull request.
+
+## Contact
+
+**Author**: Mesut Akcan\
+**Email**: <makcan@gmail.com>\
+**Blog**: [mesutakcan.blogspot.com](http://mesutakcan.blogspot.com)\
+**GitHub**: [mesutakcan](http://github.com/mesutakcan)
