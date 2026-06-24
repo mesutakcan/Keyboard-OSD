@@ -18,16 +18,29 @@ Detailed information, source code, compiled binaries, and more are available on 
 https://github.com/mesutakcan/Keyboard-OSD
 =========================
 */
+;@Ahk2Exe-SetMainIcon app_icon.ico
 
 #Requires AutoHotkey v2
 #SingleInstance Force
 
+; ========================================
+; COMPILER DIRECTIVES
+; ========================================
+;@Ahk2Exe-SetDescription Keyboard OSD
+;@Ahk2Exe-SetFileVersion 1.0
+;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
+;@Ahk2Exe-SetMainIcon app_icon.ico
+
 #Include "commonDialog.ahk"
 #Include "settings-gui.ahk"
 
-Try TraySetIcon(A_ScriptDir "\app_icon.ico", , true)
+MAINICON := A_ScriptDir "\app_icon.ico"
+PAUSEICON := A_ScriptDir "\app_icon_pause.ico"
+
+Try TraySetIcon(MAINICON, , true)
 
 AppVer := "1.0"
+
 ; SETTINGS
 IniFile := A_ScriptDir "\settings.ini"
 SetupTrayMenu()
@@ -252,10 +265,10 @@ TogglePause(ItemName, *) {
 	Pause(-1)
 	if A_IsPaused {
 		A_TrayMenu.Check(ItemName)
-		Try TraySetIcon(A_ScriptDir "\app_icon_pause.ico", , true)
+		Try TraySetIcon(PAUSEICON, , true)
 	} else {
 		A_TrayMenu.Uncheck(ItemName)
-		Try TraySetIcon(A_ScriptDir "\app_icon.ico", , true)
+		Try TraySetIcon(MAINICON, , true)
 	}
 }
 
@@ -758,8 +771,9 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 	if (!hasMods || (modList.Length = 1 && hasShift) || isAltGr)
 		isTyping := IsTypingVK(foundVK, &typedChar)
 
-	; If the key is a space and no modifiers are held, treat it as typing mode
-	if isSpace && !hasMods {
+	; Space continues typing only when there is already typed text.
+	; Otherwise it falls through to special-key repeat handling as "Space".
+	if isSpace && !hasMods && TypingBuf != "" {
 		isTyping := true
 		typedChar := " "
 	}
