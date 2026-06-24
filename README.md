@@ -39,6 +39,8 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and s
 - `settings-gui.ahk` - settings window
 - `CommonDialog.ahk` - color and font dialog helpers
 - `settings.ini` - user settings
+- `app_icon.ico` - application tray icon used when the OSD is active
+- `app_icon_pause.ico` - application tray icon used when the OSD is paused
 
 ## Usage
 
