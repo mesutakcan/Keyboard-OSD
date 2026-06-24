@@ -18,7 +18,6 @@ Detailed information, source code, compiled binaries, and more are available on 
 https://github.com/mesutakcan/Keyboard-OSD
 =========================
 */
-;@Ahk2Exe-SetMainIcon app_icon.ico
 
 #Requires AutoHotkey v2
 #SingleInstance Force
