@@ -1,7 +1,7 @@
 /*
 =========================
 Keyboard OSD
-v1.0.1
+v1.1
 =========================
 Keyboard OSD is a lightweight Windows utility that displays keyboard input and
  shortcut combinations on screen in real time.
@@ -26,7 +26,7 @@ https://github.com/mesutakcan/Keyboard-OSD
 ; COMPILER DIRECTIVES
 ; ========================================
 ;@Ahk2Exe-SetDescription Keyboard OSD
-;@Ahk2Exe-SetFileVersion 1.0.1
+;@Ahk2Exe-SetFileVersion 1.1
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-AddResource app_icon.ico, 100
 ;@Ahk2Exe-AddResource app_icon_pause.ico, 101
@@ -34,7 +34,7 @@ https://github.com/mesutakcan/Keyboard-OSD
 #Include "commonDialog.ahk"
 #Include "settings-gui.ahk"
 
-AppVer := "1.0.1"
+AppVer := "1.1"
 
 ; Compile-time resource handling.
 ; If the script is compiled, use the embedded resources; otherwise, load from the file system.
