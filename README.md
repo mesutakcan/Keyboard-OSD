@@ -26,7 +26,7 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and s
 - Automatically positions the OSD on the monitor that contains the active window.
 - Includes a settings window for colors, font, size, transparency, position, margins, line spacing, and display timing.
 - Saves settings to `settings.ini`.
-- **Icons are now embedded in the executable** — no external icon files needed for compiled version.
+- **Icons are now embedded in the executable** no external icon files needed for compiled version.
 
 ## Requirements
 
@@ -103,7 +103,7 @@ After saving settings, the script reloads automatically to apply the changes.
 
 **New:**
 - Icons are now embedded directly into the compiled executable (Resource IDs: 100 and 101)
-- Improved portability — the `.exe` file now works standalone without requiring external icon files
+- Improved portability the `.exe` file now works standalone without requiring external icon files
 
 **Fixes:**
 - Fixed tray icon not displaying correctly in compiled executable
