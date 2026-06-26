@@ -1,14 +1,14 @@
 /*
 =========================
 Keyboard OSD
-v1.0
+v1.0.1
 =========================
 Keyboard OSD is a lightweight Windows utility that displays keyboard input and
  shortcut combinations on screen in real time.
 It is designed for presentations, tutorials, screen recordings,
  and live demonstrations where visible keystrokes make the workflow easier to follow.
 =========================
-24/06/2026
+26/06/2026
 Mesut Akcan
 =========================
 mesutakcan.blogspot.com
@@ -26,19 +26,32 @@ https://github.com/mesutakcan/Keyboard-OSD
 ; COMPILER DIRECTIVES
 ; ========================================
 ;@Ahk2Exe-SetDescription Keyboard OSD
-;@Ahk2Exe-SetFileVersion 1.0
+;@Ahk2Exe-SetFileVersion 1.0.1
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
-;@Ahk2Exe-SetMainIcon app_icon.ico
+;@Ahk2Exe-AddResource app_icon.ico, 100
+;@Ahk2Exe-AddResource app_icon_pause.ico, 101
 
 #Include "commonDialog.ahk"
 #Include "settings-gui.ahk"
 
-MAINICON := A_ScriptDir "\app_icon.ico"
-PAUSEICON := A_ScriptDir "\app_icon_pause.ico"
+AppVer := "1.0.1"
 
-Try TraySetIcon(MAINICON, , true)
+; Compile-time resource handling.
+; If the script is compiled, use the embedded resources; otherwise, load from the file system.
+if A_IsCompiled {
+	MAINICON := 100
+	PAUSEICON := 101
+} else {
+	MAINICON := A_ScriptDir "\app_icon.ico"
+	PAUSEICON := A_ScriptDir "\app_icon_pause.ico"
+}
 
-AppVer := "1.0"
+; Set the tray icon based on whether the script is compiled or running in the interpreter.
+if A_IsCompiled {
+	Try TraySetIcon(A_ScriptFullPath, -MAINICON, true)
+} else {
+	Try TraySetIcon(MAINICON, , true)
+}
 
 ; SETTINGS
 IniFile := A_ScriptDir "\settings.ini"
@@ -260,14 +273,23 @@ GetActiveMonitorBounds() {
 	return Map("x", wL, "y", wT, "w", wR - wL, "h", wB - wT)
 }
 
+; TogglePause - toggles the script's paused state and updates the tray icon and menu checkmark accordingly.
 TogglePause(ItemName, *) {
 	Pause(-1)
 	if A_IsPaused {
 		A_TrayMenu.Check(ItemName)
-		Try TraySetIcon(PAUSEICON, , true)
+		if A_IsCompiled {
+			Try TraySetIcon(A_ScriptFullPath, -PAUSEICON, true)
+		} else {
+			Try TraySetIcon(PAUSEICON, , true)
+		}
 	} else {
 		A_TrayMenu.Uncheck(ItemName)
-		Try TraySetIcon(MAINICON, , true)
+		if A_IsCompiled {
+			Try TraySetIcon(A_ScriptFullPath, -MAINICON, true)
+		} else {
+			Try TraySetIcon(MAINICON, , true)
+		}
 	}
 }
 
