@@ -3,7 +3,7 @@
 [![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.1-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
+[![Version](https://img.shields.io/badge/Version-1.2-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
 
 ![GitHub stars](https://img.shields.io/github/stars/mesutakcan/Keyboard-OSD?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/mesutakcan/Keyboard-OSD?style=social)
@@ -27,6 +27,7 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and s
 - Includes a settings window for colors, font, size, transparency, position, margins, line spacing, and display timing.
 - Saves settings to `settings.ini`.
 - **Icons are now embedded in the executable** no external icon files needed for compiled version.
+- OSD windows fade out smoothly when dismissed.
 
 ## Requirements
 
@@ -99,6 +100,13 @@ After saving settings, the script reloads automatically to apply the changes.
 
 ## History
 
+### Version 1.2 (2026-06-28)
+
+**New:**
+- OSD windows now fade out smoothly when dismissed instead of disappearing instantly
+
+---
+
 ### Version 1.1 (2026-06-26)
 
 **New:**
@@ -108,11 +116,6 @@ After saving settings, the script reloads automatically to apply the changes.
 **Fixes:**
 - Fixed tray icon not displaying correctly in compiled executable
 - Fixed pause icon switching when script is paused
-
-**Technical:**
-- Added `;@Ahk2Exe-AddResource` compiler directives to embed icons
-- Updated `TraySetIcon` calls to use embedded resources when running as compiled executable
-- Added `A_IsCompiled` conditional logic for icon loading
 
 ### Version 1.0 (2026-06-24)
 
