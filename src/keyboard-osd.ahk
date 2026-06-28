@@ -1,14 +1,13 @@
 /*
 =========================
 Keyboard OSD
-v1.1
 =========================
 Keyboard OSD is a lightweight Windows utility that displays keyboard input and
  shortcut combinations on screen in real time.
 It is designed for presentations, tutorials, screen recordings,
  and live demonstrations where visible keystrokes make the workflow easier to follow.
 =========================
-26/06/2026
+28/06/2026
 Mesut Akcan
 =========================
 mesutakcan.blogspot.com
@@ -26,7 +25,7 @@ https://github.com/mesutakcan/Keyboard-OSD
 ; COMPILER DIRECTIVES
 ; ========================================
 ;@Ahk2Exe-SetDescription Keyboard OSD
-;@Ahk2Exe-SetFileVersion 1.1
+;@Ahk2Exe-SetFileVersion 1.2
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-AddResource app_icon.ico, 100
 ;@Ahk2Exe-AddResource app_icon_pause.ico, 101
@@ -34,7 +33,7 @@ https://github.com/mesutakcan/Keyboard-OSD
 #Include "commonDialog.ahk"
 #Include "settings-gui.ahk"
 
-AppVer := "1.1"
+AppVer := "1.2"
 
 ; Compile-time resource handling.
 ; If the script is compiled, use the embedded resources; otherwise, load from the file system.
@@ -141,6 +140,7 @@ ApplyDWMCorners(hwnd) {
 	; 2 = DWMWCP_ROUND, 1 = DWMWCP_DONOTROUND
 	pref := Buffer(4, 0)
 	NumPut("Int", osd.CornerRadius ? 2 : 1, pref)
+	; Apply corner rounding
 	DllCall("dwmapi\DwmSetWindowAttribute",
 		"Ptr", hwnd,
 		"UInt", 33,
@@ -150,6 +150,7 @@ ApplyDWMCorners(hwnd) {
 	; Disable shadow. DWMWA_NCRENDERING_POLICY = 2, DWMNCRP_DISABLED = 1
 	ncr := Buffer(4, 0)
 	NumPut("Int", 1, ncr)
+	; Disable shadows
 	DllCall("dwmapi\DwmSetWindowAttribute",
 		"Ptr", hwnd,
 		"UInt", 2,
@@ -205,8 +206,9 @@ VKtoChar(vk) {
 		if (DllCall("GetKeyState", "UShort", m, "Short") & 0x0001)
 			NumPut("UChar", NumGet(kbState, m, "UChar") | 0x01, kbState, m)
 	}
-
+	; Get the keyboard layout for the current thread
 	hkl := DllCall("GetKeyboardLayout", "UInt", 0, "Ptr")
+	; Map the virtual key to a scan code
 	scanCode := DllCall("MapVirtualKeyEx", "UInt", vk, "UInt", 0, "Ptr", hkl, "UInt")
 	; wFlags = 4: prevents ToUnicodeEx from changing keyboard state
 	ret := DllCall("ToUnicodeEx",
@@ -218,6 +220,7 @@ VKtoChar(vk) {
 
 ; Is it a typing character?
 IsTypingVK(vk, &outChar) {
+	; Virtual keys to exclude from the OSD
 	static excludeVK := Map(
 		0x08, 1, 0x09, 1, 0x0D, 1, 0x1B, 1, 0x20, 1,
 		0x21, 1, 0x22, 1, 0x23, 1, 0x24, 1,
@@ -232,10 +235,14 @@ IsTypingVK(vk, &outChar) {
 		0x90, 1, 0x91, 1, 0x14, 1,
 		0xA0, 1, 0xA1, 1, 0xA2, 1, 0xA3, 1, 0xA4, 1, 0xA5, 1
 	)
+
+	; Check if the virtual key is an excluded key
 	if excludeVK.Has(vk) {
 		outChar := ""
 		return false
 	}
+
+	; Convert the virtual key to a character
 	ch := VKtoChar(vk)
 
 	; Exclude control characters (ASCII < 0x20) and empty results
@@ -243,6 +250,8 @@ IsTypingVK(vk, &outChar) {
 		outChar := ""
 		return false
 	}
+
+	; Return the character if it is a typing character
 	outChar := ch
 	return true
 }
@@ -254,11 +263,14 @@ GetActiveMonitorBounds() {
 	try hwnd := WinGetID("A")
 	catch
 		hwnd := 0
+
+	; Get the foreground window's position
 	if (hwnd) {
 		try WinGetPos(&wx, &wy, , , hwnd)
 		catch
 			hwnd := 0
 	}
+	; Get the foreground window's monitor
 	if (hwnd) {
 		monCount := MonitorGetCount()
 		loop monCount {
@@ -269,6 +281,7 @@ GetActiveMonitorBounds() {
 			}
 		}
 	}
+	; Get the primary monitor's work area
 	MonitorGetWorkArea(MonitorGetPrimary(), &wL, &wT, &wR, &wB)
 	return Map("x", wL, "y", wT, "w", wR - wL, "h", wB - wT)
 }
@@ -293,6 +306,7 @@ TogglePause(ItemName, *) {
 	}
 }
 
+; Show about message
 ShowAbout(*) {
 	MsgBox(
 		"Keyboard OSD v" AppVer "`n`n"
@@ -316,6 +330,7 @@ CalcStackBase(mon, totalH, winW := 0) {
 	mY := mon["y"]
 	mW := mon["w"]
 	mH := mon["h"]
+	; Get the OSD position
 	switch osd.Position {
 		case "BottomRight":
 			return [mX + mW - winW - osd.MarginX,
@@ -356,6 +371,8 @@ RenderOSD(extraLine := "") {
 
 	; Cancel ongoing sequential hiding
 	SetTimer(StartDismiss, 0)
+
+	; Turn off DismissNext timer
 	SetTimer(DismissNext, 0)
 
 	; Compile lines to display
@@ -368,7 +385,7 @@ RenderOSD(extraLine := "") {
 	; If no lines to display, hide all windows and return
 	if (allLines.Length = 0) {
 		loop osd.MaxLines
-			RowWins[A_Index].Hide()
+			FadeOutWin(RowWins[A_Index])
 		return
 	}
 
@@ -416,6 +433,8 @@ RenderOSD(extraLine := "") {
 	baseY := CalcStackBase(mon, totalH)[2]
 
 	yOffset := 0
+
+	; Render each line
 	loop total {
 		idx := A_Index
 		isActive := (idx = activeIdx)
@@ -459,13 +478,14 @@ RenderOSD(extraLine := "") {
 		yOffset += lh + osd.LineGap
 	}
 
-	; Hide unused windows
+	; Hide unused windows (rows beyond MaxLines)
 	if (total < osd.MaxLines) {
 		loop (osd.MaxLines - total)
-			RowWins[total + A_Index].Hide()
+			FadeOutWin(RowWins[total + A_Index])
 	}
-
+	; Dismiss the OSD after osd.DisplayTime
 	SetTimer(StartDismiss, 0)
+	; Call StartDismiss after osd.DisplayTime to fade out the OSD
 	SetTimer(StartDismiss, -osd.DisplayTime)
 }
 
@@ -486,20 +506,30 @@ MeasureTextWidth(text, fontName, fontSize, bold := true, italic := false) {
 		NumPut("UChar", italic ? 1 : 0, lf, 20) ; lfItalic
 		NumPut("UChar", 0, lf, 23) ; lfCharSet = DEFAULT_CHARSET
 		StrPut(fontName, lf.Ptr + 28, 32, "UTF-16")
+
+		; Create and cache GDI font object if not already cached
 		TextMeasureFontCache[cacheKey] := DllCall("CreateFontIndirectW", "Ptr", lf, "Ptr")
 	}
 
+	; Select the font into the DC
 	hOld := DllCall("SelectObject", "Ptr", hDC, "Ptr", TextMeasureFontCache[cacheKey], "Ptr")
 	size := Buffer(8, 0)
+
+	; Get the width of the text in pixels
 	DllCall("GetTextExtentPoint32W",
 		"Ptr", hDC,
 		"Str", text,
 		"Int", StrLen(text),
 		"Ptr", size)
+
+	; Select the original font back into the DC
 	DllCall("SelectObject", "Ptr", hDC, "Ptr", hOld)
+
+	; Return the width of the text in pixels
 	return NumGet(size, 0, "Int")
 }
 
+; Clear the text measure font cache
 ClearMeasureTextWidthCache() {
 	global TextMeasureFontCache
 	for , hFont in TextMeasureFontCache {
@@ -510,7 +540,7 @@ ClearMeasureTextWidthCache() {
 	TextMeasureFontCache.Clear()
 }
 
-; Helpers
+; Push a line to the Lines array
 PushLine(line) {
 	global Lines, osd
 	Lines.Push(line)
@@ -519,6 +549,7 @@ PushLine(line) {
 		Lines.RemoveAt(1)
 }
 
+; Flush typing buffer to Lines array
 FlushTyping() {
 	global TypingBuf, LastKey, RepeatCount
 
@@ -531,6 +562,7 @@ FlushTyping() {
 	}
 }
 
+; Find the last word break in the given text
 FindLastWordBreak(text) {
 	lastBreak := 0
 	loop StrLen(text) {
@@ -543,6 +575,7 @@ FindLastWordBreak(text) {
 	return lastBreak
 }
 
+; Wrap typing buffer if no word break is found
 WrapTypingBuffer(nextText) {
 	global TypingBuf
 	candidate := TypingBuf . nextText
@@ -559,18 +592,12 @@ WrapTypingBuffer(nextText) {
 		TypingBuf := rest
 		return
 	}
-
+	; If no word break is found, flush the typing buffer and push the next text as a new line.
 	FlushTyping()
 	TypingBuf := nextText
 }
 
-; ============================================================
-; Sequential Dismissal. from top line downwards
-;
-; StartDismiss - triggered after osd.DisplayTime
-; DismissNext - dismisses one line every osd.DismissDelay
-; HideOSD - resets state when all lines are hidden
-; ============================================================
+; Dismissal timer trigger
 StartDismiss() {
 	global RowWins, osd
 	anyVisible := false
@@ -581,33 +608,39 @@ StartDismiss() {
 			break
 		}
 	}
+	; If any lines are visible, start sequential dismissal
 	anyVisible ? DismissNext() : HideOSD()
 }
 
+; Dismisses the top line and schedules the next dismissal
 DismissNext() {
 	global RowWins, osd
 
-	; Collect visible windows (index order = top to bottom)
 	visible := []
 
+	; Collect visible windows
 	loop osd.MaxLines {
 		if DllCall("IsWindowVisible", "Ptr", RowWins[A_Index].Hwnd)
 			visible.Push(A_Index)
 	}
 
+	; If no lines are visible, hide the OSD
 	if (visible.Length = 0) {
 		HideOSD()
 		return
 	}
 
-	RowWins[visible[1]].Hide() ; hide the top one
-
+	FadeOutWin(RowWins[visible[1]]) ; hide the top one with fade
+	; If only one line is visible, hide the OSD
 	if (visible.Length = 1)
 		HideOSD()
+
+	; Otherwise, continue with the next line
 	else
 		SetTimer(DismissNext, -osd.DismissDelay)
 }
 
+; Hides the OSD and resets the state
 HideOSD() {
 	global RowWins, osd
 	global LastKey, RepeatCount, Lines, TypingBuf, PendingMod
@@ -617,7 +650,7 @@ HideOSD() {
 
 	; Reset state
 	loop osd.MaxLines
-		RowWins[A_Index].Hide()
+		FadeOutWin(RowWins[A_Index])
 
 	LastKey := ""
 	RepeatCount := 0
@@ -671,6 +704,7 @@ KeyWatcher() {
 				newModName := name
 		}
 	}
+	; Updates the DownMods map to the currently down keys
 	DownMods := stillMods
 
 	; Track main key presses
@@ -707,6 +741,7 @@ KeyWatcher() {
 			newKeys.Push([vk, key, tickShift, tickCtrl, tickAlt, tickIsAltGr, (tickLWin || tickRWin)])
 	}
 
+	; Updates the DownVKs map to the currently down keys
 	DownVKs := stillDown
 
 	; If a main key arrived, cancel pending lone-modifier display
@@ -848,15 +883,38 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 		RepeatCount := 0
 		PushLine(label)
 	}
-
 	RenderOSD()
 }
 
+; Reads a value from the INI file
 ReadIni(Key, Def, asInt := false) {
 	Val := IniRead(IniFile, "OSD", Key, Def)
 	return asInt ? Number(Val) : Val
 }
 
+; Fade-out helper. Hides a Gui window with a smooth alpha blend
+FadeOutWin(guiObj, duration := 250) {
+	hwnd := guiObj.Hwnd
+	if !DllCall("IsWindowVisible", "Ptr", hwnd)
+		return
+	; Read the current alpha set by WinSetTransparent (LWA_ALPHA)
+	origAlpha := 0
+	DllCall("GetLayeredWindowAttributes", "Ptr", hwnd, "Ptr", 0, "UChar*", &origAlpha, "Ptr", 0)
+	if (origAlpha = 0)
+		origAlpha := 255
+	; Fade out in 10 steps
+	steps := 10
+	stepMs := Max(1, Round(duration / steps))
+	loop steps {
+		WinSetTransparent(Round(origAlpha * (steps - A_Index) / steps), hwnd)
+		Sleep(stepMs)
+	}
+	guiObj.Hide()
+	; Restore original alpha so the window is ready for the next Show()
+	WinSetTransparent(origAlpha, hwnd)
+}
+
+; Sets up the tray menu
 SetupTrayMenu() {
 	A_TrayMenu.Delete()
 	A_TrayMenu.Add("About", ShowAbout)
@@ -869,4 +927,5 @@ SetupTrayMenu() {
 	A_TrayMenu.Add("Exit", (*) => ExitApp())
 }
 
+; Main hotkey loop
 SetTimer(KeyWatcher, 16)
