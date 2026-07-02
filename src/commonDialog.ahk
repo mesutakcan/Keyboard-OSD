@@ -16,12 +16,13 @@ class FontDialog {
 
 	static Choose(hwndOwner, &fontName, &fontSize, &bold, &italic, &underline, &strikeout, &color, &charSet := 1) {
 		static LOGFONT_SIZE := 92 ; LOGFONTW: 28 bytes header + 64 bytes face (32 WCHARs)
-		static CF_SIZE_32 := 64
-		static CF_SIZE_64 := 104
-		CF_SIZE := A_PtrSize = 8 ? CF_SIZE_64 : CF_SIZE_32
+		static CF_SIZE_32 := 64 ; CHOOSEFONTW: 28 bytes header + 32 bytes LOGFONTW + 4 bytes COLORREF
+		static CF_SIZE_64 := 104 ; CHOOSEFONTW: 40 bytes header + 32 bytes LOGFONTW + 4 bytes COLORREF
+		; Note: CHOOSEFONTW struct size is 64 bytes on 32-bit and 104 bytes on 64-bit. The LOGFONTW struct is always 92 bytes.
+		CF_SIZE := A_PtrSize = 8 ? CF_SIZE_64 : CF_SIZE_32  
 
-		LF := Buffer(LOGFONT_SIZE, 0)
-		CF := Buffer(CF_SIZE, 0)
+		LF := Buffer(LOGFONT_SIZE, 0) ; LOGFONTW struct
+		CF := Buffer(CF_SIZE, 0) ; CHOOSEFONTW struct
 
 		; Pre-fill LOGFONT so the dialog opens with current values
 		; lfHeight: use negative point-to-pixel conversion so dialog shows correct size
