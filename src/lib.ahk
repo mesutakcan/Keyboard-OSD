@@ -180,9 +180,9 @@ InitWin(idx, alpha) {
 	hwnd := RowWins[idx].Hwnd
 	curStyle := WinGetExStyle(hwnd)
 	WinSetExStyle(curStyle | 0x20, hwnd)
-	curClass := DllCall("GetClassLongPtr", "Ptr", hwnd, "Int", -26, "Ptr")
+	curClass := DllCall("GetClassLongW", "Ptr", hwnd, "Int", -26, "UInt")
 	if (curClass & 0x20000)
-		DllCall("SetClassLongPtr", "Ptr", hwnd, "Int", -26, "Ptr", curClass & ~0x20000)
+		DllCall("SetClassLongW", "Ptr", hwnd, "Int", -26, "UInt", curClass & ~0x20000)
 	WinSetTransparent(alpha, hwnd)
 	ApplyDWMCorners(hwnd)
 	RowReady[idx] := true
