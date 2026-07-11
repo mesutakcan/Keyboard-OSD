@@ -16,22 +16,19 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and s
 
 ## Features
 
-- Shows typed text, special keys, and shortcut combinations as an on-screen display.
-- Shortcut and modifier key presses are displayed as styled badge overlays with a rounded border, distinct fill color, and configurable transparency — visually separating them from typed text.
-- Groups repeated key presses with a counter.
-- Keeps recent key history on multiple OSD lines, each with its own expiry timer.
-- Supports optional word wrapping for typed text.
-- Handles Backspace naturally while typing by removing the last visible character.
-- Supports common modifiers such as Ctrl, Shift, Alt, Win, and AltGr.
-- Uses a click-through overlay so the OSD does not block the active window.
-- Automatically positions the OSD on the monitor that contains the active window.
-- Includes a settings window for colors, font, size, transparency, position, margins, padding, line spacing, and display timing.
-- Saves settings to `settings.ini` using separate sections for Appearance, Layout, History, Special, and Timing.
-- Icons are embedded in the executable — no external icon files needed for the compiled version.
-- OSD lines fade out smoothly using independent non-blocking per-row timers.
-- Rounded window corners via the DWM API.
-- History lines have their own separate font size, text color, background color, and transparency.
-- Pause and resume the OSD with **`Ctrl+Shift+F8`** or from the tray menu.
+- Shows your typed text and shortcut combinations on screen in real time.
+- Shortcuts and modifier keys (like `Ctrl+C` or `Shift`) appear as eye-catching badges, clearly separated from regular typed text.
+- Repeated key presses are grouped together with a counter instead of cluttering the screen.
+- Keeps a short history of recent keys, with each line fading out on its own timer.
+- Optional word wrap for longer typed text, and natural Backspace handling while typing.
+- Works with common modifiers: Ctrl, Shift, Alt, Win, and AltGr.
+- Click-through overlay — it never gets in the way of the window you're working in.
+- Automatically follows the active window to the correct monitor.
+- Fully customizable from a settings window: colors, fonts, size, transparency, position, margins, padding, and timing — all with a live preview.
+- Smooth fade-out animations and optional rounded corners.
+- History lines can have their own font size, colors, and transparency, separate from the active line.
+- Pause and resume anytime with **`Ctrl+Shift+F8`** or from the tray menu.
+- Compiled version is a single portable `.exe` — no separate icon files or installation needed.
 
 ## Requirements
 
@@ -136,22 +133,9 @@ Controls the appearance of shortcut and modifier key badges (e.g. `Ctrl+C`, `Shi
 ### Version 1.4 (2026-07-11)
 
 **New:**
-- Shortcut and modifier key presses are now rendered as styled badge overlays using GDI+ instead of plain text rows. Each badge has a configurable rounded border, fill color, text color, and transparency.
-- New `[Special]` INI section with seven settings: `SpecialBgColor`, `SpecialTextColor`, `SpecialBorderColor`, `SpecialAlpha`, `SpecialBorderWidth`, `SpecialTextPad`, `SpecialTextYNudge`.
-- New "Special" tab in the settings window with live preview of the badge appearance.
-- `OSDLine` now carries an `IsSpecial` flag that controls whether a row is drawn as a badge or as a regular OSD line.
-- `MakeRoundedBadgeBitmap` — GDI+ function that draws a rounded-corner badge with a filled interior and border, returned as an HBITMAP.
-- `RenderPreviewBadge` — pixel-level software renderer used in the settings preview for both active, history, and special badge previews.
-- `BlendHexColor` — alpha-blends a foreground hex color over a background for use in font preview labels.
-- `HexToARGB` — converts an RGB hex string to a GDI+ ARGB integer.
-- `_InRoundRect` — sub-pixel rounded rectangle hit test used by `RenderPreviewBadge`.
-- `SpecialBadgeCache` — badges are cached by size so GDI+ bitmaps are not recreated on every render.
-- GDI+ is now initialized at startup (`InitGdiplus`) and cleaned up on exit (`ShutdownGdiplus`).
-- Each OSD row now also has a `Picture` control (`RowPics`) that holds the badge bitmap when a special row is active.
-
-**Fixes:**
-- Settings window: controls inside each tab were positioned too close to the tab's top edge; all tab content now starts with more top spacing.
-- Special tab preview now shows a two-key combo sample (`Ctrl + PgDn`) instead of a single key, matching the spacing format used by real badge labels.
+- Shortcut and modifier key presses now appear as styled badges with a rounded border, fill color, and their own transparency — making them instantly stand out from regular typed text.
+- Added a new **Special** tab in the settings window to customize badge colors, border, padding, and text position, with a live preview.
+- Badge rendering is now cached, keeping the OSD smooth even with frequent shortcut presses.
 
 ---
 
