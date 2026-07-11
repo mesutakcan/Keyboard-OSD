@@ -34,6 +34,14 @@ sectionMap["DisplayTime"] := "Timing"
 sectionMap["DismissDelay"] := "Timing"
 sectionMap["ModifierDelay"] := "Timing"
 
+sectionMap["SpecialBgColor"] := "Special"
+sectionMap["SpecialTextColor"] := "Special"
+sectionMap["SpecialBorderColor"] := "Special"
+sectionMap["SpecialAlpha"] := "Special"
+sectionMap["SpecialBorderWidth"] := "Special"
+sectionMap["SpecialTextPad"] := "Special"
+sectionMap["SpecialTextYNudge"] := "Special"
+
 ShowSettingsGui() {
 	SettingsGui := Gui("+AlwaysOnTop", "Keyboard OSD Settings")
 	SettingsGui.SetFont("s9", "Segoe UI")
@@ -47,11 +55,11 @@ ShowSettingsGui() {
 	tabX := 8
 	tabY := 8
 	tabW := 318
-	tabH := 325
-	cy0 := 38
+	tabH := 335
+	cy0 := 48
 
 	tabCtrl := SettingsGui.Add("Tab", "x" tabX " y" tabY " w" tabW " h" tabH,
-		["Appearance", "Layout", "History", "Timing"])
+		["Appearance", "Layout", "History", "Special", "Timing"])
 
 	tabCtrl.UseTab(1)
 
@@ -65,7 +73,7 @@ ShowSettingsGui() {
 	btnFont := SettingsGui.Add("Button", "x+4 yp w30 h22", "...")
 	btnFont.OnEvent("Click", _PickFont)
 
-	fontPreviewPic := SettingsGui.Add("Picture", "x20 y+10 w290 h40 +Border", "")
+	fontPreviewPic := SettingsGui.Add("Picture", "x20 y+10 w290 h40", "")
 	fontPreviewCtrl := SettingsGui.Add("Text", "x20 yp w290 h40 BackgroundTrans +Center +0x200", "Sample Text")
 
 	SettingsGui.Add("Text", "x20 y+8 w130", "OSD Corners:")
@@ -108,10 +116,27 @@ ShowSettingsGui() {
 	AddColorSetting("Background Color", "HistBgColor")
 	AddSliderSetting("Background Alpha", "HistAlpha", "", 1, 255)
 
-	histPreviewPic := SettingsGui.Add("Picture", "x20 y+10 w270 h35 +Border", "")
+	histPreviewPic := SettingsGui.Add("Picture", "x20 y+10 w270 h35", "")
 	histPreviewCtrl := SettingsGui.Add("Text", "x20 yp  w270 h35 BackgroundTrans +Center +0x200", "Sample History Text")
 
 	tabCtrl.UseTab(4)
+
+	AddColorSetting("Border Color", "SpecialBorderColor", cy0)
+	AddColorSetting("Fill Color", "SpecialBgColor")
+	AddColorSetting("Text Color", "SpecialTextColor")
+	AddSliderSetting("Alpha", "SpecialAlpha", "", 1, 255)
+	borderWidthCtrl := AddIntSetting("Border Width", "SpecialBorderWidth", "", 1, 20)
+	borderWidthCtrl.OnEvent("Change", (*) => _UpdateSpecialPreview())
+	textPadCtrl := AddIntSetting("Text Padding", "SpecialTextPad", "", 0, 30)
+	textPadCtrl.OnEvent("Change", (*) => _UpdateSpecialPreview())
+	textNudgeCtrl := AddIntSetting("Text Y Nudge", "SpecialTextYNudge", "", -20, 20)
+	textNudgeCtrl.OnEvent("Change", (*) => _UpdateSpecialPreview())
+
+	specialPreviewPic := SettingsGui.Add("Picture", "x20 y+10 w200 h50", "")
+	specialPreviewPic.GetPos(&specialPreviewX, &specialPreviewY)
+	specialPreviewCtrl := SettingsGui.Add("Text", "x" specialPreviewX " y" specialPreviewY " w200 h50 BackgroundTrans +Center +0x200", "Ctrl + PgDn")
+
+	tabCtrl.UseTab(5)
 
 	AddIntSetting("Display Time (ms)", "DisplayTime", cy0, 100, 10000)
 	AddIntSetting("Dismiss Delay (ms)", "DismissDelay", "", 50, 1000)
@@ -126,6 +151,7 @@ ShowSettingsGui() {
 
 	_UpdateFontPreview()
 	_UpdateHistPreview()
+	_UpdateSpecialPreview()
 	SettingsGui.Show()
 
 	_PickFont(*) {
@@ -171,7 +197,7 @@ ShowSettingsGui() {
 		val := Number(osd.%key%)
 		sliderCtrl := SettingsGui.Add("Slider", "x150 yp w130 h22 v" key " Range" min "-" max " TickInterval50 AltSubmit", val)
 		textCtrl := SettingsGui.Add("Text", "x+5  yp w30  h22 v" key "Value", val)
-		sliderCtrl.OnEvent("Change", (ctrl, *) => (textCtrl.Text := ctrl.Value, _UpdateFontPreview(), _UpdateHistPreview()))
+		sliderCtrl.OnEvent("Change", (ctrl, *) => (textCtrl.Text := ctrl.Value, _UpdateFontPreview(), _UpdateHistPreview(), _UpdateSpecialPreview()))
 		return sliderCtrl
 	}
 
@@ -206,50 +232,23 @@ ShowSettingsGui() {
 		_UpdateColorPreview(edit, preview)
 		_UpdateFontPreview()
 		_UpdateHistPreview()
-	}
-
-	_MakePreviewBitmap(picCtrl, bgHex, alphaVal, pw, ph) {
-		if (picCtrl.HasProp("_hBmp") && picCtrl._hBmp != 0)
-			DllCall("DeleteObject", "Ptr", picCtrl._hBmp)
-
-		hBmp := DllCall("CreateBitmap", "Int", pw, "Int", ph, "UInt", 1, "UInt", 32, "Ptr", 0, "Ptr")
-		bgHex := (StrLen(bgHex) = 6 && RegExMatch(bgHex, "^[0-9A-F]{6}$")) ? bgHex : "E0E0E0"
-		rr := Integer("0x" SubStr(bgHex, 1, 2))
-		gg := Integer("0x" SubStr(bgHex, 3, 2))
-		bb := Integer("0x" SubStr(bgHex, 5, 2))
-		aa := Number(alphaVal)
-
-		pBuf := Buffer(pw * ph * 4)
-		pPtr := pBuf.Ptr
-		Loop ph {
-			rowBase := (A_Index - 1) * pw * 4
-			Loop pw {
-				off := rowBase + (A_Index - 1) * 4
-				NumPut("UChar", bb, pPtr, off)
-				NumPut("UChar", gg, pPtr, off + 1)
-				NumPut("UChar", rr, pPtr, off + 2)
-				NumPut("UChar", aa, pPtr, off + 3)
-			}
-		}
-		DllCall("SetBitmapBits", "Ptr", hBmp, "UInt", pw * ph * 4, "Ptr", pPtr)
-		picCtrl._hBmp := hBmp
-		picCtrl.Value := "HBITMAP:" hBmp
+		_UpdateSpecialPreview()
 	}
 
 	_UpdateFontPreview() {
 		if !IsSet(fontPreviewPic)
 			return
-		_MakePreviewBitmap(fontPreviewPic,
-			SettingsGui["BgColor"].Value,
-			SettingsGui["BgAlpha"].Value,
-			270, 40)
+		bgHex := SettingsGui["BgColor"].Value
+		alphaVal := SettingsGui["BgAlpha"].Value
+		RenderPreviewBadge(fontPreviewPic, 270, 40, bgHex, alphaVal)
+		fontPreviewPic.Redraw()
 
 		opts := "s" fontSizeVal
 			. " " (fontBoldVal ? "Bold" : "norm")
 			. (fontItalicVal ? " Italic" : "")
 			. (fontUnderlineVal ? " Underline" : "")
 			. (fontStrikeoutVal ? " Strike" : "")
-			. " c" SettingsGui["TextColor"].Value
+			. " c" BlendHexColor(SettingsGui["TextColor"].Value, "FFFFFF", alphaVal)
 
 		fontPreviewCtrl.SetFont(opts, fontNameEdit.Value)
 		fontPreviewCtrl.Redraw()
@@ -258,19 +257,49 @@ ShowSettingsGui() {
 	_UpdateHistPreview() {
 		if !IsSet(histPreviewPic)
 			return
-		_MakePreviewBitmap(histPreviewPic,
-			SettingsGui["HistBgColor"].Value,
-			SettingsGui["HistAlpha"].Value,
-			270, 35)
+		bgHex := SettingsGui["HistBgColor"].Value
+		alphaVal := SettingsGui["HistAlpha"].Value
+		RenderPreviewBadge(histPreviewPic, 270, 35, bgHex, alphaVal)
+		histPreviewPic.Redraw()
 
 		histFsVal := SettingsGui["HistFontSize"].Value
 		opts := "s" histFsVal
 			. " " (fontBoldVal ? "Bold" : "norm")
 			. (fontItalicVal ? " Italic" : "")
-			. " c" SettingsGui["HistTextColor"].Value
+			. " c" BlendHexColor(SettingsGui["HistTextColor"].Value, "FFFFFF", alphaVal)
 
 		histPreviewCtrl.SetFont(opts, fontNameEdit.Value)
 		histPreviewCtrl.Redraw()
+	}
+
+	_UpdateSpecialPreview() {
+		if !IsSet(specialPreviewPic)
+			return
+
+		borderW := Number(SettingsGui["SpecialBorderWidth"].Value)
+		textPad := Number(SettingsGui["SpecialTextPad"].Value)
+		alphaVal := SettingsGui["SpecialAlpha"].Value
+		sampleText := "Ctrl + PgDn"
+
+		textH := MeasureTextHeight(fontNameEdit.Value, fontSizeVal, fontBoldVal, fontItalicVal)
+		textW := MeasureTextWidth(sampleText, fontNameEdit.Value, fontSizeVal, fontBoldVal, fontItalicVal)
+		pw := textW + 2 * (borderW + textPad) + 20
+		ph := textH + 2 * (borderW + textPad)
+
+		specialPreviewPic.Move(specialPreviewX, specialPreviewY, pw, ph)
+		RenderPreviewBadge(specialPreviewPic, pw, ph,
+			SettingsGui["SpecialBgColor"].Value, alphaVal,
+			SettingsGui["SpecialBorderColor"].Value, borderW, SPECIAL_OUTER_RADIUS)
+		specialPreviewPic.Redraw()
+
+		nudge := Number(SettingsGui["SpecialTextYNudge"].Value)
+		opts := "s" fontSizeVal
+			. " " (fontBoldVal ? "Bold" : "norm")
+			. " c" BlendHexColor(SettingsGui["SpecialTextColor"].Value, "FFFFFF", alphaVal)
+
+		specialPreviewCtrl.SetFont(opts, fontNameEdit.Value)
+		specialPreviewCtrl.Move(specialPreviewX, specialPreviewY + nudge, pw, ph - nudge)
+		specialPreviewCtrl.Redraw()
 	}
 
 	_UpdateColorPreview(edit, preview) {
@@ -293,6 +322,7 @@ ShowSettingsGui() {
 			_UpdateColorPreview(edit, preview)
 			_UpdateFontPreview()
 			_UpdateHistPreview()
+			_UpdateSpecialPreview()
 		}
 	}
 

@@ -7,7 +7,7 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and
 It is designed for presentations, tutorials, screen recordings,
  and live demonstrations where visible keystrokes make the workflow easier to follow.
 =========================
-02/07/2026
+11/07/2026
 Mesut Akcan
 =========================
 mesutakcan.blogspot.com
@@ -18,14 +18,13 @@ https://github.com/mesutakcan/Keyboard-OSD
 =========================
 TODO:
 * Excluded keys list
-* Show non-typing keys in a different text color
 * Allow key name customization
 */
 
 #Requires AutoHotkey v2
 #SingleInstance Force
 ;@Ahk2Exe-SetDescription Keyboard OSD
-;@Ahk2Exe-SetFileVersion 1.3
+;@Ahk2Exe-SetFileVersion 1.4
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
 ;@Ahk2Exe-AddResource app_icon_pause.ico, 207
@@ -34,7 +33,7 @@ TODO:
 #Include "commonDialog.ahk"
 #Include "settings-gui.ahk"
 
-AppVer := "1.3"
+AppVer := "1.4"
 
 if !A_IsCompiled {
 	MAINICON := A_ScriptDir "\app_icon.ico"
@@ -46,10 +45,15 @@ IniFile := A_ScriptDir "\settings.ini"
 SetupTrayMenu()
 
 OnExit(ClearMeasureTextWidthCache)
+OnExit(ShutdownGdiplus)
+InitGdiplus()
 
 global TextMeasureFontCache := Map()
 global CachedMaxWidth := 0
 global TextMeasureFontHDC := 0
+
+global SPECIAL_OUTER_RADIUS := 8
+global SpecialBadgeCache := Map()
 
 class OSDState {
 	LastKey := ""
@@ -91,6 +95,14 @@ class OSDSettings {
 	HistTextColor := ReadIni("HistTextColor", "FFFFFF", , "History")
 	HistBgColor := ReadIni("HistBgColor", "AAAAAA", , "History")
 
+	SpecialBgColor := ReadIni("SpecialBgColor", "FFFFFF", , "Special")
+	SpecialTextColor := ReadIni("SpecialTextColor", "000000", , "Special")
+	SpecialBorderColor := ReadIni("SpecialBorderColor", "000000", , "Special")
+	SpecialAlpha := ReadIni("SpecialAlpha", 175, true, "Special")
+	SpecialBorderWidth := ReadIni("SpecialBorderWidth", 3, true, "Special")
+	SpecialTextPad := ReadIni("SpecialTextPad", 1, true, "Special")
+	SpecialTextYNudge := ReadIni("SpecialTextYNudge", -5, true, "Special")
+
 	DisplayTime := ReadIni("DisplayTime", 4000, true, "Timing")
 	DismissDelay := ReadIni("DismissDelay", 3000, true, "Timing")
 	ModifierDelay := ReadIni("ModifierDelay", 150, true, "Timing")
@@ -103,11 +115,13 @@ class OSDLine {
 	Text := ""
 	CreatedAt := 0
 	Count := 1
+	IsSpecial := false
 
-	__New(text) {
+	__New(text, isSpecial := false) {
 		this.BaseText := text
 		this.Text := text
 		this.CreatedAt := A_TickCount
+		this.IsSpecial := isSpecial
 	}
 
 	Age() {
@@ -125,12 +139,13 @@ class OSDLine {
 	}
 }
 
-CHAR_WIDTH_RATIO := 0.55 ; Average character width ratio for the default font size, used for estimating max typing length.
+CHAR_WIDTH_RATIO := 0.55
 osd.LineHeight := MeasureTextHeight(osd.FontName, osd.FontSize, osd.FontBold, osd.FontItalic) + osd.PaddingYTop + osd.PaddingYBottom
 osd.HistLineHeight := MeasureTextHeight(osd.FontName, osd.HistFontSize, osd.FontBold, osd.FontItalic) + osd.PaddingYTop + osd.PaddingYBottom
 osd.MaxTyping := Max(10, Floor((osd.Width - osd.PaddingX * 2) / (osd.FontSize * CHAR_WIDTH_RATIO)))
 global RowWins := []
 global RowLabels := []
+global RowPics := []
 global RowReady := []
 global FadingStates := []
 global FadeTimers := []
@@ -151,10 +166,13 @@ global histOptions := "s" osd.HistFontSize
 loop osd.MaxLines {
 	w := Gui("+AlwaysOnTop -Caption +ToolWindow")
 	w.BackColor := osd.BgColor
+    
+	pic := w.AddPicture("x0 y0 w1 h1 Hidden")
 	lbl := w.AddText("x0 y0 w" osd.Width " h" osd.LineHeight " c" osd.TextColor " Center", "")
 	lbl.SetFont(activeOptions, osd.FontName)
 	RowWins.Push(w)
 	RowLabels.Push(lbl)
+	RowPics.Push(pic)
 	RowReady.Push(false)
 	FadingStates.Push(false)
 	FadeTimers.Push(0)
@@ -238,10 +256,15 @@ RenderOSD(extraLine := "") {
 		SetTimer(CheckExpiredLines, 100)
 
 	allLines := []
-	for ln in osd.State.Lines
+	allSpecial := []
+	for ln in osd.State.Lines {
 		allLines.Push(ln.Text)
-	if (extraLine != "")
+		allSpecial.Push(ln.IsSpecial)
+	}
+	if (extraLine != "") {
 		allLines.Push(extraLine)
+		allSpecial.Push(false)
+	}
 
 	if (allLines.Length = 0) {
 		osd.State.LastKey := ""
@@ -256,15 +279,29 @@ RenderOSD(extraLine := "") {
 
 	start := Max(1, allLines.Length - osd.MaxLines + 1)
 	visLines := []
-	loop (allLines.Length - start + 1)
+	visSpecial := []
+	loop (allLines.Length - start + 1) {
 		visLines.Push(allLines[start + A_Index - 1])
+		visSpecial.Push(allSpecial[start + A_Index - 1])
+	}
 
 	total := visLines.Length
 	activeIdx := total
 
+	specialLh := MeasureTextHeight(osd.FontName, osd.FontSize, osd.FontBold, osd.FontItalic)
+		+ 2 * (osd.SpecialBorderWidth + osd.SpecialTextPad)
+
+	rowHeights := []
+	loop total {
+		li := A_Index
+		isAct := (li = activeIdx)
+		isSpec := isAct && visSpecial[li]
+		rowHeights.Push(isSpec ? specialLh : (isAct ? osd.LineHeight : osd.HistLineHeight))
+	}
+
 	totalH := 0
 	loop total {
-		totalH += (A_Index = activeIdx) ? osd.LineHeight : osd.HistLineHeight
+		totalH += rowHeights[A_Index]
 		if (A_Index < total)
 			totalH += osd.LineGap
 	}
@@ -301,13 +338,15 @@ RenderOSD(extraLine := "") {
 
 		idx := A_Index
 		isActive := (idx = activeIdx)
-		lh := isActive ? osd.LineHeight : osd.HistLineHeight
-		alpha := isActive ? osd.BgAlpha : osd.HistAlpha
-		clr := isActive ? osd.TextColor : osd.HistTextColor
-		bgClr := isActive ? osd.BgColor : osd.HistBgColor
+		isSpecial := isActive && visSpecial[idx]
+		lh := rowHeights[idx]
+		alpha := isSpecial ? osd.SpecialAlpha : (isActive ? osd.BgAlpha : osd.HistAlpha)
+		clr := isSpecial ? osd.SpecialTextColor : (isActive ? osd.TextColor : osd.HistTextColor)
+		bgClr := isSpecial ? osd.SpecialBorderColor : (isActive ? osd.BgColor : osd.HistBgColor)
 
 		w := RowWins[winIdx]
 		lbl := RowLabels[winIdx]
+		pic := RowPics[winIdx]
 
 		static lastOpts := Map()
 		static lastBgClr := Map()
@@ -328,19 +367,34 @@ RenderOSD(extraLine := "") {
 			lastOpts[winIdx] := opts
 		}
 
-		if !lastClr.Has(winIdx) || lastClr[winIdx] != clr {
-			lbl.Opt("c" clr)
-			lastClr[winIdx] := clr
+        
+		styleKey := clr "|" isSpecial
+		if !lastClr.Has(winIdx) || lastClr[winIdx] != styleKey {
+			lbl.Opt("c" clr " BackgroundTrans" (isSpecial ? " +0x200" : " -0x200"))
+			lastClr[winIdx] := styleKey
 		}
 
 		rowW := widths[idx]
 		rowBaseX := CalcStackBase(mon, totalH, rowW)[1]
 		rowY := baseY + yOffset
-		geomKey := rowBaseX "," rowY "," rowW "," lh
+		geomKey := rowBaseX "," rowY "," rowW "," lh "," isSpecial
 
 		needsShow := (!RowReady[winIdx] || !DllCall("IsWindowVisible", "Ptr", w.Hwnd) || !lastGeom.Has(winIdx) || lastGeom[winIdx] != geomKey)
 		if (needsShow) {
-			lbl.Move(0, osd.PaddingYTop, rowW, lh - osd.PaddingYTop - osd.PaddingYBottom)
+			if (isSpecial) {
+				badgeKey := rowW "," lh
+				if !SpecialBadgeCache.Has(badgeKey)
+					SpecialBadgeCache[badgeKey] := MakeRoundedBadgeBitmap(rowW, lh,
+						osd.SpecialBorderColor, osd.SpecialBgColor, osd.SpecialBorderWidth, SPECIAL_OUTER_RADIUS)
+				pic.Move(0, 0, rowW, lh)
+				pic.Value := "HBITMAP:*" SpecialBadgeCache[badgeKey]
+				pic.Visible := true
+				pic.Redraw()
+				lbl.Move(0, osd.SpecialTextYNudge, rowW, lh - osd.SpecialTextYNudge)
+			} else {
+				pic.Visible := false
+				lbl.Move(0, osd.PaddingYTop, rowW, lh - osd.PaddingYTop - osd.PaddingYBottom)
+			}
 			w.Show("NA x" (rowBaseX) " y" (rowY) " w" rowW " h" lh)
 			lastGeom[winIdx] := geomKey
 		}
@@ -372,14 +426,14 @@ RenderOSD(extraLine := "") {
 	}
 }
 
-PushLine(line) {
+PushLine(line, isSpecial := false) {
 	global osd
 
-	;
+    
 	if (Trim(line) = "")
 		return
 
-	osd.State.Lines.Push(OSDLine(line))
+	osd.State.Lines.Push(OSDLine(line, isSpecial))
 	while (osd.State.Lines.Length > osd.MaxLines)
 		osd.State.Lines.RemoveAt(1)
 	SetTimer(CheckExpiredLines, 100)
@@ -649,7 +703,7 @@ CommitPendingMod() {
 	name := osd.State.PendingMod
 	osd.State.PendingMod := ""
 
-	; Boş basımları (görünmez karakterleri) filtrele
+        
 	if (Trim(name) = "")
 		return
 
@@ -662,7 +716,7 @@ CommitPendingMod() {
 		osd.State.Lines[osd.State.Lines.Length].Increment()
 	} else {
 		osd.State.LastKey := name
-		PushLine(name)
+		PushLine(name, true)
 	}
 	CancelAllFades()
 	RenderOSD()
@@ -746,7 +800,7 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 		osd.State.Lines[osd.State.Lines.Length].Increment()
 	} else {
 		osd.State.LastKey := label
-		PushLine(label)
+		PushLine(label, true)
 	}
 	CancelAllFades()
 	RenderOSD()

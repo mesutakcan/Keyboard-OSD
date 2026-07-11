@@ -231,3 +231,145 @@ ReadIni(Key, Def, asInt := false, Section := "Appearance") {
 	Val := IniRead(IniFile, Section, Key, Def)
 	return asInt ? Number(Val) : Val
 }
+
+global GdipToken := 0
+
+InitGdiplus() {
+	global GdipToken
+	if GdipToken
+		return
+	si := Buffer(24, 0)
+	NumPut("UInt", 1, si, 0)
+	DllCall("gdiplus\GdiplusStartup", "Ptr*", &GdipToken, "Ptr", si, "Ptr", 0)
+}
+
+ShutdownGdiplus(*) {
+	global GdipToken
+	if GdipToken {
+		try DllCall("gdiplus\GdiplusShutdown", "Ptr", GdipToken)
+		GdipToken := 0
+	}
+}
+
+_InRoundRect(px, py, left, top, right, bottom, r) {
+	if (px < left || px > right || py < top || py > bottom)
+		return false
+	if (r <= 0)
+		return true
+	cx := Max(left + r, Min(px, right - r))
+	cy := Max(top + r, Min(py, bottom - r))
+	dx := px - cx, dy := py - cy
+	return (dx * dx + dy * dy) <= r * r
+}
+
+RenderPreviewBadge(picCtrl, w, h, fillHex, alpha, borderHex := "", borderWidth := 0, radius := 0) {
+	if (picCtrl.HasProp("_hBmp") && picCtrl._hBmp != 0)
+		DllCall("DeleteObject", "Ptr", picCtrl._hBmp)
+
+	fr := Integer("0x" SubStr(fillHex, 1, 2)), fg := Integer("0x" SubStr(fillHex, 3, 2)), fb := Integer("0x" SubStr(fillHex, 5, 2))
+	hasBorder := (borderWidth > 0 && borderHex != "")
+	if hasBorder
+		br := Integer("0x" SubStr(borderHex, 1, 2)), bg := Integer("0x" SubStr(borderHex, 3, 2)), bb := Integer("0x" SubStr(borderHex, 5, 2))
+	aa := Number(alpha) & 0xFF
+	innerR := Max(0, radius - borderWidth)
+	ss := (radius > 0) ? 3 : 1
+
+	hBmp := DllCall("CreateBitmap", "Int", w, "Int", h, "UInt", 1, "UInt", 32, "Ptr", 0, "Ptr")
+	pBuf := Buffer(w * h * 4)
+	pPtr := pBuf.Ptr
+
+	Loop h {
+		py := A_Index - 1
+		rowBase := py * w * 4
+		Loop w {
+			px := A_Index - 1
+			off := rowBase + px * 4
+			outerHit := 0, innerHit := 0
+			Loop ss {
+				sy := py + (A_Index - 0.5) / ss
+				Loop ss {
+					sx := px + (A_Index - 0.5) / ss
+					if _InRoundRect(sx, sy, 0, 0, w - 1, h - 1, radius)
+						outerHit++
+					if hasBorder && _InRoundRect(sx, sy, borderWidth, borderWidth, w - 1 - borderWidth, h - 1 - borderWidth, innerR)
+						innerHit++
+				}
+			}
+			total := ss * ss
+			outerCov := outerHit / total
+			if (outerCov = 0) {
+				NumPut("UChar", 0, pPtr, off + 3)
+				continue
+			}
+			innerCov := hasBorder ? innerHit / total : 1
+
+			rr := hasBorder ? Round(fr * innerCov + br * (1 - innerCov)) : fr
+			gg := hasBorder ? Round(fg * innerCov + bg * (1 - innerCov)) : fg
+			bbv := hasBorder ? Round(fb * innerCov + bb * (1 - innerCov)) : fb
+
+			NumPut("UChar", bbv, pPtr, off)
+			NumPut("UChar", gg, pPtr, off + 1)
+			NumPut("UChar", rr, pPtr, off + 2)
+			NumPut("UChar", Round(aa * outerCov), pPtr, off + 3)
+		}
+	}
+	DllCall("SetBitmapBits", "Ptr", hBmp, "UInt", w * h * 4, "Ptr", pPtr)
+	picCtrl._hBmp := hBmp
+	picCtrl.Value := "HBITMAP:*" hBmp
+}
+
+
+BlendHexColor(fgHex, bgHex, alpha) {
+	a := Number(alpha) / 255
+	fr := Integer("0x" SubStr(fgHex, 1, 2)), fg := Integer("0x" SubStr(fgHex, 3, 2)), fb := Integer("0x" SubStr(fgHex, 5, 2))
+	br := Integer("0x" SubStr(bgHex, 1, 2)), bgc := Integer("0x" SubStr(bgHex, 3, 2)), bb := Integer("0x" SubStr(bgHex, 5, 2))
+	rr := Round(fr * a + br * (1 - a))
+	gg := Round(fg * a + bgc * (1 - a))
+	bb2 := Round(fb * a + bb * (1 - a))
+	return Format("{:02X}{:02X}{:02X}", rr, gg, bb2)
+}
+
+MakeRoundedBadgeBitmap(w, h, borderHex, bgHex, borderWidth, outerRadius) {
+	pBitmap := 0, pGraphics := 0, pPath := 0, pBrush := 0
+	DllCall("gdiplus\GdipCreateBitmapFromScan0", "Int", w, "Int", h, "Int", 0, "Int", 0x26200A, "Ptr", 0, "Ptr*", &pBitmap)
+	DllCall("gdiplus\GdipGetImageGraphicsContext", "Ptr", pBitmap, "Ptr*", &pGraphics)
+	DllCall("gdiplus\GdipSetSmoothingMode", "Ptr", pGraphics, "Int", 4)
+
+	argbBorder := HexToARGB(borderHex)
+	argbBg := HexToARGB(bgHex)
+
+	DllCall("gdiplus\GdipGraphicsClear", "Ptr", pGraphics, "UInt", argbBorder)
+
+	x := borderWidth, y := borderWidth
+	iw := w - 2 * borderWidth - 1, ih := h - 2 * borderWidth - 1
+	d := Max(0, outerRadius - borderWidth) * 2
+
+	DllCall("gdiplus\GdipCreatePath", "Int", 0, "Ptr*", &pPath)
+	DllCall("gdiplus\GdipAddPathArc", "Ptr", pPath, "Float", x, "Float", y, "Float", d, "Float", d, "Float", 180, "Float", 90)
+	DllCall("gdiplus\GdipAddPathArc", "Ptr", pPath, "Float", x + iw - d, "Float", y, "Float", d, "Float", d, "Float", 270, "Float", 90)
+	DllCall("gdiplus\GdipAddPathArc", "Ptr", pPath, "Float", x + iw - d, "Float", y + ih - d, "Float", d, "Float", d, "Float", 0, "Float", 90)
+	DllCall("gdiplus\GdipAddPathArc", "Ptr", pPath, "Float", x, "Float", y + ih - d, "Float", d, "Float", d, "Float", 90, "Float", 90)
+	DllCall("gdiplus\GdipClosePathFigure", "Ptr", pPath)
+
+	DllCall("gdiplus\GdipCreateSolidFill", "UInt", argbBg, "Ptr*", &pBrush)
+	DllCall("gdiplus\GdipFillPath", "Ptr", pGraphics, "Ptr", pBrush, "Ptr", pPath)
+
+	DllCall("gdiplus\GdipDeleteBrush", "Ptr", pBrush)
+	DllCall("gdiplus\GdipDeletePath", "Ptr", pPath)
+
+	hBmp := 0
+	DllCall("gdiplus\GdipCreateHBITMAPFromBitmap", "Ptr", pBitmap, "Ptr*", &hBmp, "UInt", 0xFFFFFF)
+
+	DllCall("gdiplus\GdipDeleteGraphics", "Ptr", pGraphics)
+	DllCall("gdiplus\GdipDisposeImage", "Ptr", pBitmap)
+
+	return hBmp
+}
+
+HexToARGB(hex) {
+	hex := RegExReplace(hex, "[^0-9A-Fa-f]")
+	rr := Integer("0x" SubStr(hex, 1, 2))
+	gg := Integer("0x" SubStr(hex, 3, 2))
+	bb := Integer("0x" SubStr(hex, 5, 2))
+	return 0xFF000000 | (rr << 16) | (gg << 8) | bb
+}
