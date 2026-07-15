@@ -21,7 +21,7 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and s
 - Repeated key presses are grouped together with a counter instead of cluttering the screen.
 - Keeps a short history of recent keys, with each line fading out on its own timer.
 - Optional word wrap for longer typed text, and natural Backspace handling while typing.
-- Works with common modifiers: Ctrl, Shift, Alt, Win, and AltGr.
+- Works with common modifiers: <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, <kbd>Alt</kbd>, <kbd>Win</kbd>, and <kbd>AltGr</kbd>.
 - Click-through overlay — it never gets in the way of the window you're working in.
 - Automatically follows the active window to the correct monitor.
 - Fully customizable from a settings window: colors, fonts, size, transparency, position, margins, padding, and timing — all with a live preview.
@@ -138,7 +138,7 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 - Holding down multiple modifier keys in sequence now updates the badge smoothly to show the full combination, instead of showing a separate badge for each stage.
 
 **Fixes:**
-- A lone modifier badge (e.g. just "Shift") no longer lingers on screen after you start typing.
+- A lone modifier badge (e.g. just <kbd>Shift</kbd>) no longer lingers on screen after you start typing.
 
 ---
 
