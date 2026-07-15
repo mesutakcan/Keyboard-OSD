@@ -1,13 +1,11 @@
 /*
 =========================
-Keyboard OSD
-=========================
-Keyboard OSD is a lightweight Windows utility that displays keyboard input and
- shortcut combinations on screen in real time.
+Keyboard OSD is a lightweight Windows utility that displays keyboard input
+ and shortcut combinations on screen in real time.
 It is designed for presentations, tutorials, screen recordings,
  and live demonstrations where visible keystrokes make the workflow easier to follow.
 =========================
-11/07/2026
+15/07/2026
 Mesut Akcan
 =========================
 mesutakcan.blogspot.com
@@ -24,7 +22,7 @@ TODO:
 #Requires AutoHotkey v2
 #SingleInstance Force
 ;@Ahk2Exe-SetDescription Keyboard OSD
-;@Ahk2Exe-SetFileVersion 1.4
+;@Ahk2Exe-SetFileVersion 1.5
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
 ;@Ahk2Exe-AddResource app_icon_pause.ico, 207
@@ -33,7 +31,7 @@ TODO:
 #Include "commonDialog.ahk"
 #Include "settings-gui.ahk"
 
-AppVer := "1.4"
+AppVer := "1.5"
 
 if !A_IsCompiled {
 	MAINICON := A_ScriptDir "\app_icon.ico"
@@ -61,6 +59,7 @@ class OSDState {
 	DownMods := Map()
 	Lines := []
 	PendingMod := ""
+	PendingComposeTap := ""
 	PendingDismiss := 0
 	TypingBuf := ""
 }
@@ -137,6 +136,13 @@ class OSDLine {
 		this.Text := this.BaseText " ×" this.Count
 		this.CreatedAt := A_TickCount
 	}
+
+	ReplaceText(text) {
+		this.BaseText := text
+		this.Text := text
+		this.Count := 1
+		this.CreatedAt := A_TickCount
+	}
 }
 
 CHAR_WIDTH_RATIO := 0.55
@@ -166,7 +172,7 @@ global histOptions := "s" osd.HistFontSize
 loop osd.MaxLines {
 	w := Gui("+AlwaysOnTop -Caption +ToolWindow")
 	w.BackColor := osd.BgColor
-    
+
 	pic := w.AddPicture("x0 y0 w1 h1 Hidden")
 	lbl := w.AddText("x0 y0 w" osd.Width " h" osd.LineHeight " c" osd.TextColor " Center", "")
 	lbl.SetFont(activeOptions, osd.FontName)
@@ -203,7 +209,7 @@ TogglePause(ItemName := "Pause OSD", *) {
 				else if (vk = 0x12 || vk = 0xA4 || vk = 0xA5)
 					osd.State.DownMods[0x12] := "Alt"
 				else if (vk = 0x5B || vk = 0x5C)
-					continue
+					osd.State.DownMods[0x5B] := "Win"
 				else
 					osd.State.DownVKs[vk] := true
 			}
@@ -213,18 +219,6 @@ TogglePause(ItemName := "Pause OSD", *) {
 	}
 	if (!A_IsCompiled)
 		Try TraySetIcon(A_IsPaused ? PAUSEICON : MAINICON, , true)
-}
-
-HideOSDInstant() {
-	global RowWins, osd
-	CancelAllFades()
-	SetTimer(CheckExpiredLines, 0)
-	SetTimer(CommitPendingMod, 0)
-
-	loop osd.MaxLines
-		RowWins[A_Index].Hide()
-
-	ResetOSDState()
 }
 
 ShowAbout(*) {
@@ -240,388 +234,14 @@ ShowAbout(*) {
 	)
 }
 
-RenderOSD(extraLine := "") {
-	global RowWins, RowLabels, RowReady, osd, CachedMaxWidth, FadingStates, FadeAlphas
-
-	static lastMonW := 0
-	mon := GetActiveMonitorBounds()
-
-	if (mon["w"] != lastMonW) {
-		lastMonW := mon["w"]
-		CachedMaxWidth := Min(osd.Width, Round(mon["w"] * 0.75))
-	}
-	OSD_MaxWidth := CachedMaxWidth
-
-	if (osd.State.Lines.Length > 0 || extraLine != "")
-		SetTimer(CheckExpiredLines, 100)
-
-	allLines := []
-	allSpecial := []
-	for ln in osd.State.Lines {
-		allLines.Push(ln.Text)
-		allSpecial.Push(ln.IsSpecial)
-	}
-	if (extraLine != "") {
-		allLines.Push(extraLine)
-		allSpecial.Push(false)
-	}
-
-	if (allLines.Length = 0) {
-		osd.State.LastKey := ""
-		osd.State.TypingBuf := ""
-
-		loop osd.MaxLines {
-			if (!FadingStates[A_Index])
-				RowWins[A_Index].Hide()
-		}
-		return
-	}
-
-	start := Max(1, allLines.Length - osd.MaxLines + 1)
-	visLines := []
-	visSpecial := []
-	loop (allLines.Length - start + 1) {
-		visLines.Push(allLines[start + A_Index - 1])
-		visSpecial.Push(allSpecial[start + A_Index - 1])
-	}
-
-	total := visLines.Length
-	activeIdx := total
-
-	specialLh := MeasureTextHeight(osd.FontName, osd.FontSize, osd.FontBold, osd.FontItalic)
-		+ 2 * (osd.SpecialBorderWidth + osd.SpecialTextPad)
-
-	rowHeights := []
-	loop total {
-		li := A_Index
-		isAct := (li = activeIdx)
-		isSpec := isAct && visSpecial[li]
-		rowHeights.Push(isSpec ? specialLh : (isAct ? osd.LineHeight : osd.HistLineHeight))
-	}
-
-	totalH := 0
-	loop total {
-		totalH += rowHeights[A_Index]
-		if (A_Index < total)
-			totalH += osd.LineGap
-	}
-
-	widths := []
-
-	if (!osd.AutoWidth) {
-		defaultW := Min(osd.Width, OSD_MaxWidth)
-		loop total
-			widths.Push(defaultW)
-	} else {
-		loop total {
-			idx := A_Index
-			fs := (idx = activeIdx) ? osd.FontSize : osd.HistFontSize
-			tw := MeasureTextWidth(visLines[idx], osd.FontName, fs, osd.FontBold, osd.FontItalic)
-			tw += osd.PaddingX * 2
-			widths.Push(Min(tw, OSD_MaxWidth))
-		}
-	}
-
-	if (osd.AutoWidth)
-		osd.MaxTyping := Max(10, Floor((OSD_MaxWidth - osd.PaddingX * 2) / (osd.FontSize * CHAR_WIDTH_RATIO)))
-
-	baseY := CalcStackBase(mon, totalH)[2]
-
-	yOffset := 0
-	winIdx := 1
-
-	loop total {
-		while (winIdx <= osd.MaxLines && FadingStates[winIdx])
-			winIdx++
-		if (winIdx > osd.MaxLines)
-			break
-
-		idx := A_Index
-		isActive := (idx = activeIdx)
-		isSpecial := isActive && visSpecial[idx]
-		lh := rowHeights[idx]
-		alpha := isSpecial ? osd.SpecialAlpha : (isActive ? osd.BgAlpha : osd.HistAlpha)
-		clr := isSpecial ? osd.SpecialTextColor : (isActive ? osd.TextColor : osd.HistTextColor)
-		bgClr := isSpecial ? osd.SpecialBorderColor : (isActive ? osd.BgColor : osd.HistBgColor)
-
-		w := RowWins[winIdx]
-		lbl := RowLabels[winIdx]
-		pic := RowPics[winIdx]
-
-		static lastOpts := Map()
-		static lastBgClr := Map()
-		static lastClr := Map()
-		static lastText := Map()
-		static lastGeom := Map()
-		static lastAlpha := Map()
-
-		if !lastBgClr.Has(winIdx) || lastBgClr[winIdx] != bgClr {
-			w.BackColor := bgClr
-			lastBgClr[winIdx] := bgClr
-		}
-
-		opts := isActive ? activeOptions : histOptions
-
-		if !lastOpts.Has(winIdx) || lastOpts[winIdx] != opts {
-			lbl.SetFont(opts, osd.FontName)
-			lastOpts[winIdx] := opts
-		}
-
-        
-		styleKey := clr "|" isSpecial
-		if !lastClr.Has(winIdx) || lastClr[winIdx] != styleKey {
-			lbl.Opt("c" clr " BackgroundTrans" (isSpecial ? " +0x200" : " -0x200"))
-			lastClr[winIdx] := styleKey
-		}
-
-		rowW := widths[idx]
-		rowBaseX := CalcStackBase(mon, totalH, rowW)[1]
-		rowY := baseY + yOffset
-		geomKey := rowBaseX "," rowY "," rowW "," lh "," isSpecial
-
-		needsShow := (!RowReady[winIdx] || !DllCall("IsWindowVisible", "Ptr", w.Hwnd) || !lastGeom.Has(winIdx) || lastGeom[winIdx] != geomKey)
-		if (needsShow) {
-			if (isSpecial) {
-				badgeKey := rowW "," lh
-				if !SpecialBadgeCache.Has(badgeKey)
-					SpecialBadgeCache[badgeKey] := MakeRoundedBadgeBitmap(rowW, lh,
-						osd.SpecialBorderColor, osd.SpecialBgColor, osd.SpecialBorderWidth, SPECIAL_OUTER_RADIUS)
-				pic.Move(0, 0, rowW, lh)
-				pic.Value := "HBITMAP:*" SpecialBadgeCache[badgeKey]
-				pic.Visible := true
-				pic.Redraw()
-				lbl.Move(0, osd.SpecialTextYNudge, rowW, lh - osd.SpecialTextYNudge)
-			} else {
-				pic.Visible := false
-				lbl.Move(0, osd.PaddingYTop, rowW, lh - osd.PaddingYTop - osd.PaddingYBottom)
-			}
-			w.Show("NA x" (rowBaseX) " y" (rowY) " w" rowW " h" lh)
-			lastGeom[winIdx] := geomKey
-		}
-
-		text := visLines[idx]
-		if !lastText.Has(winIdx) || lastText[winIdx] != text {
-			lbl.Text := text
-			lastText[winIdx] := text
-		}
-
-		if (!FadingStates[winIdx]) {
-			FadeAlphas[winIdx] := alpha
-			if !RowReady[winIdx]
-				InitWin(winIdx, alpha)
-			else if (needsShow || !lastAlpha.Has(winIdx) || lastAlpha[winIdx] != alpha) {
-				WinSetTransparent(alpha, w.Hwnd)
-				lastAlpha[winIdx] := alpha
-			}
-		}
-
-		yOffset += lh + osd.LineGap
-		winIdx++
-	}
-
-	loop (osd.MaxLines - winIdx + 1) {
-		i := winIdx + A_Index - 1
-		if (!FadingStates[i])
-			RowWins[i].Hide()
-	}
-}
-
-PushLine(line, isSpecial := false) {
-	global osd
-
-    
-	if (Trim(line) = "")
-		return
-
-	osd.State.Lines.Push(OSDLine(line, isSpecial))
-	while (osd.State.Lines.Length > osd.MaxLines)
-		osd.State.Lines.RemoveAt(1)
-	SetTimer(CheckExpiredLines, 100)
-}
-
-FlushTyping(isTimeout := false) {
-	global osd
-	SetTimer(FlushTypingTimeout, 0)
-
-	if (osd.State.TypingBuf != "") {
-		line := osd.State.TypingBuf
-		osd.State.TypingBuf := ""
-		osd.State.LastKey := ""
-		beforeCount := osd.State.Lines.Length
-		PushLine(line)
-		if (isTimeout && osd.State.Lines.Length > beforeCount)
-			osd.State.Lines[osd.State.Lines.Length].CreatedAt := A_TickCount - osd.DisplayTime
-		RenderOSD()
-	}
-}
-
-FlushTypingTimeout() {
-	FlushTyping(true)
-}
-
-FindLastWordBreak(text) {
-	lastBreak := 0
-	loop StrLen(text) {
-		ch := SubStr(text, A_Index, 1)
-		if (ch = " " || ch = A_Tab)
-			lastBreak := A_Index
-	}
-	return lastBreak
-}
-
-WrapTypingBuffer(nextText) {
-	global osd
-	candidate := osd.State.TypingBuf . nextText
-	breakAt := FindLastWordBreak(candidate)
-	if (breakAt > 1) {
-		line := RTrim(SubStr(candidate, 1, breakAt - 1))
-		rest := LTrim(SubStr(candidate, breakAt + 1))
-		if (line != "")
-			PushLine(line)
-		osd.State.TypingBuf := rest
-		return
-	}
-	FlushTyping()
-	osd.State.TypingBuf := nextText
-}
-
-StartFade(winIdx) {
-	global RowWins, FadingStates, FadeTimers
-	if (FadingStates[winIdx])
-		return
-	w := RowWins[winIdx]
-	if (!DllCall("IsWindowVisible", "Ptr", w.Hwnd))
-		return
-
-	FadingStates[winIdx] := true
-	FadeTimers[winIdx] := FadeStep.Bind(winIdx)
-	SetTimer(FadeTimers[winIdx], 16)
-}
-
-FadeStep(winIdx) {
-	global RowWins, FadingStates, FadeTimers, FadeAlphas
-	if (!FadingStates[winIdx])
-		return
-
-	w := RowWins[winIdx]
-	FadeAlphas[winIdx] -= 8
-
-	if (FadeAlphas[winIdx] <= 0) {
-		SetTimer(FadeTimers[winIdx], 0)
-		FadeTimers[winIdx] := 0
-		w.Hide()
-		FadingStates[winIdx] := false
-		return
-	}
-	WinSetTransparent(FadeAlphas[winIdx], w.Hwnd)
-}
-
-CancelAllFades() {
-	global RowWins, FadingStates, FadeTimers
-
-	loop osd.MaxLines {
-		idx := A_Index
-		if (FadingStates[idx]) {
-			SetTimer(FadeTimers[idx], 0)
-			FadeTimers[idx] := 0
-			RowWins[idx].Hide()
-			FadingStates[idx] := false
-		}
-	}
-}
-
-CheckExpiredLines() {
-	global osd, RowWins, FadingStates
-
-	if (osd.State.Lines.Length = 0) {
-		SetTimer(CheckExpiredLines, 0)
-		return
-	}
-
-	visibleCount := osd.State.Lines.Length
-
-	if (osd.State.TypingBuf = "") {
-		if (visibleCount > 0 && osd.State.Lines[visibleCount].IsExpired(osd.DisplayTime)) {
-			FadeLastVisibleRow()
-			osd.State.Lines.RemoveAt(visibleCount)
-			if (osd.State.Lines.Length > 0)
-				osd.State.Lines[osd.State.Lines.Length].CreatedAt := A_TickCount
-			return
-		}
-	}
-
-	historyCount := (osd.State.TypingBuf = "") ? visibleCount - 1 : visibleCount
-	loop historyCount {
-		idx := A_Index
-		if (osd.State.Lines[idx].IsExpired(osd.DismissDelay)) {
-			FadeFirstVisibleRow()
-			osd.State.Lines.RemoveAt(idx)
-			return
-		}
-	}
-}
-
-FadeFirstVisibleRow() {
-	global RowWins, FadingStates
-	loop RowWins.Length {
-		if (DllCall("IsWindowVisible", "Ptr", RowWins[A_Index].Hwnd) && !FadingStates[A_Index]) {
-			StartFade(A_Index)
-			return
-		}
-	}
-}
-
-FadeLastVisibleRow() {
-	global RowWins, FadingStates
-	loop RowWins.Length {
-		idx := RowWins.Length - A_Index + 1
-		if (DllCall("IsWindowVisible", "Ptr", RowWins[idx].Hwnd) && !FadingStates[idx]) {
-			StartFade(idx)
-			return
-		}
-	}
-}
-
-ResetOSDState() {
-	global osd
-	CancelAllFades()
-	SetTimer(CheckExpiredLines, 0)
-	SetTimer(FlushTypingTimeout, 0)
-	osd.State.LastKey := ""
-	osd.State.Lines := []
-	osd.State.TypingBuf := ""
-	osd.State.PendingMod := ""
-	osd.State.PendingDismiss := 0
-}
-
-IsOSDVisible() {
-	global RowWins, osd
-	loop osd.MaxLines {
-		if DllCall("IsWindowVisible", "Ptr", RowWins[A_Index].Hwnd)
-			return true
-	}
-	return false
-}
-
-HideOSD() {
-	global RowWins, osd
-	CancelAllFades()
-	SetTimer(CheckExpiredLines, 0)
-	SetTimer(CommitPendingMod, 0)
-
-	loop osd.MaxLines
-		RowWins[A_Index].Hide()
-
-	ResetOSDState()
-}
-
 KeyWatcher() {
 	global osd
 
 	static modMap := Map(
 		0x10, "Shift", 0xA0, "Shift", 0xA1, "Shift",
 		0x11, "Ctrl", 0xA2, "Ctrl", 0xA3, "Ctrl",
-		0x12, "Alt", 0xA4, "Alt", 0xA5, "Alt"
+		0x12, "Alt", 0xA4, "Alt", 0xA5, "Alt",
+		0x5B, "Win", 0x5C, "Win"
 	)
 
 	tickShift := DllCall("GetAsyncKeyState", "UShort", 0x10, "Short") & 0x8000
@@ -634,7 +254,7 @@ KeyWatcher() {
 	tickIsAltGr := (tickLCtrl && tickRAlt)
 
 	stillMods := Map()
-	newModName := ""
+	newModAdded := false
 	for vk, name in modMap {
 		isDown := DllCall("GetAsyncKeyState", "UShort", vk, "Short") & 0x8000
 
@@ -642,14 +262,29 @@ KeyWatcher() {
 			canonVK := (vk = 0xA0 || vk = 0xA1) ? 0x10
 				: (vk = 0xA2 || vk = 0xA3) ? 0x11
 				: (vk = 0xA4 || vk = 0xA5) ? 0x12
+				: (vk = 0x5C) ? 0x5B
 				: vk
 			stillMods[canonVK] := name
 
-			if (!osd.State.DownMods.Has(canonVK) && newModName = "")
-				newModName := name
+			if !osd.State.DownMods.Has(canonVK)
+				newModAdded := true
 		}
 	}
 	osd.State.DownMods := stillMods
+
+	combinedMod := ""
+	if (tickIsAltGr) {
+		combinedMod := "AltGr"
+	} else {
+		if stillMods.Has(0x11)
+			combinedMod .= (combinedMod = "" ? "" : " + ") "Ctrl"
+		if stillMods.Has(0x10)
+			combinedMod .= (combinedMod = "" ? "" : " + ") "Shift"
+		if stillMods.Has(0x12)
+			combinedMod .= (combinedMod = "" ? "" : " + ") "Alt"
+		if stillMods.Has(0x5B)
+			combinedMod .= (combinedMod = "" ? "" : " + ") "Win"
+	}
 
 	stillDown := Map()
 	newKeys := []
@@ -684,12 +319,43 @@ KeyWatcher() {
 	if (newKeys.Length > 0) {
 		SetTimer(CommitPendingMod, 0)
 		osd.State.PendingMod := ""
+		osd.State.PendingComposeTap := ""
 	}
 
-	if (newModName != "" && stillDown.Count = 0 && !tickIsAltGr) {
-		SetTimer(CommitPendingMod, 0)
-		osd.State.PendingMod := newModName
-		SetTimer(CommitPendingMod, -osd.ModifierDelay)
+	if (newModAdded && combinedMod != "" && stillDown.Count = 0) {
+		isComposeOnly := true
+		for tok in StrSplit(combinedMod, " + ") {
+			if !(tok = "Shift" || tok = "AltGr") {
+				isComposeOnly := false
+				break
+			}
+		}
+
+		if (isComposeOnly && osd.State.TypingBuf != "") {
+			SetTimer(CommitPendingMod, 0)
+			osd.State.PendingMod := ""
+			osd.State.PendingComposeTap := combinedMod
+		} else {
+			SetTimer(CommitPendingMod, 0)
+			osd.State.PendingMod := combinedMod
+			SetTimer(CommitPendingMod, -osd.ModifierDelay)
+		}
+	}
+
+	if (stillMods.Count = 0 && osd.State.PendingComposeTap != "") {
+		tapLabel := osd.State.PendingComposeTap
+		osd.State.PendingComposeTap := ""
+
+		FlushTyping()
+
+		if (tapLabel = osd.State.LastKey && osd.State.Lines.Length > 0) {
+			osd.State.Lines[osd.State.Lines.Length].Increment()
+		} else {
+			osd.State.LastKey := tapLabel
+			PushLine(tapLabel, true)
+		}
+		CancelAllFades()
+		RenderOSD()
 	}
 	for info in newKeys
 		HandleKeyPress(info[1], info[2], info[3], info[4], info[5], info[6], info[7])
@@ -703,7 +369,7 @@ CommitPendingMod() {
 	name := osd.State.PendingMod
 	osd.State.PendingMod := ""
 
-        
+
 	if (Trim(name) = "")
 		return
 
@@ -714,6 +380,10 @@ CommitPendingMod() {
 
 	if (name = osd.State.LastKey && osd.State.Lines.Length > 0) {
 		osd.State.Lines[osd.State.Lines.Length].Increment()
+	} else if (osd.State.Lines.Length > 0 && osd.State.Lines[osd.State.Lines.Length].IsSpecial
+		&& osd.State.LastKey != "" && TokensSubsetOf(osd.State.LastKey, name)) {
+		osd.State.Lines[osd.State.Lines.Length].ReplaceText(name)
+		osd.State.LastKey := name
 	} else {
 		osd.State.LastKey := name
 		PushLine(name, true)
@@ -762,7 +432,18 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 
 	if isTyping {
 		if (osd.State.TypingBuf == "" && osd.State.Lines.Length > 0) {
-			osd.State.Lines[osd.State.Lines.Length].CreatedAt := A_TickCount
+			lastLine := osd.State.Lines[osd.State.Lines.Length]
+			isPureMod := true
+			for tok in StrSplit(lastLine.BaseText, " + ") {
+				if !(tok = "Ctrl" || tok = "Shift" || tok = "Alt" || tok = "Win" || tok = "AltGr") {
+					isPureMod := false
+					break
+				}
+			}
+			if (lastLine.IsSpecial && isPureMod)
+				osd.State.Lines.RemoveAt(osd.State.Lines.Length)
+			else
+				lastLine.CreatedAt := A_TickCount
 		}
 
 		maxW := CachedMaxWidth > 0 ? CachedMaxWidth : Min(osd.Width, Round(GetActiveMonitorBounds()["w"] * 0.75))
@@ -791,6 +472,10 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 	if isAltGr
 		modList := ["AltGr"]
 
+	modOnlyLabel := ""
+	for item in modList
+		modOnlyLabel .= (modOnlyLabel = "" ? "" : " + ") item
+
 	modList.Push(foundKey)
 	label := ""
 	for item in modList
@@ -798,6 +483,11 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 
 	if (label = osd.State.LastKey && osd.State.Lines.Length > 0) {
 		osd.State.Lines[osd.State.Lines.Length].Increment()
+	} else if (modOnlyLabel != "" && osd.State.Lines.Length > 0
+		&& osd.State.Lines[osd.State.Lines.Length].IsSpecial
+		&& osd.State.LastKey != "" && TokensSubsetOf(osd.State.LastKey, modOnlyLabel)) {
+		osd.State.Lines[osd.State.Lines.Length].ReplaceText(label)
+		osd.State.LastKey := label
 	} else {
 		osd.State.LastKey := label
 		PushLine(label, true)
@@ -813,7 +503,7 @@ SetupTrayMenu() {
 	A_TrayMenu.Add()
 	A_TrayMenu.Add("Settings", (*) => ShowSettingsGui())
 	A_TrayMenu.Add("Reload", (*) => Reload())
-	A_TrayMenu.Add("Pause OSD`tCtrl+Shift+F8" , TogglePause)
+	A_TrayMenu.Add("Pause OSD`tCtrl+Shift+F8", TogglePause)
 	A_TrayMenu.Add()
 	A_TrayMenu.Add("Exit", (*) => ExitApp())
 }

@@ -373,3 +373,407 @@ HexToARGB(hex) {
 	bb := Integer("0x" SubStr(hex, 5, 2))
 	return 0xFF000000 | (rr << 16) | (gg << 8) | bb
 }
+
+HideOSDInstant() {
+	global RowWins, osd
+	CancelAllFades()
+	SetTimer(CheckExpiredLines, 0)
+	SetTimer(CommitPendingMod, 0)
+
+	loop osd.MaxLines
+		RowWins[A_Index].Hide()
+
+	ResetOSDState()
+}
+
+RenderOSD(extraLine := "") {
+	global RowWins, RowLabels, RowReady, osd, CachedMaxWidth, FadingStates, FadeAlphas
+
+	static lastMonW := 0
+	mon := GetActiveMonitorBounds()
+
+	if (mon["w"] != lastMonW) {
+		lastMonW := mon["w"]
+		CachedMaxWidth := Min(osd.Width, Round(mon["w"] * 0.75))
+	}
+	OSD_MaxWidth := CachedMaxWidth
+
+	if (osd.State.Lines.Length > 0 || extraLine != "")
+		SetTimer(CheckExpiredLines, 100)
+
+	allLines := []
+	allSpecial := []
+	for ln in osd.State.Lines {
+		allLines.Push(ln.Text)
+		allSpecial.Push(ln.IsSpecial)
+	}
+	if (extraLine != "") {
+		allLines.Push(extraLine)
+		allSpecial.Push(false)
+	}
+
+	if (allLines.Length = 0) {
+		osd.State.LastKey := ""
+		osd.State.TypingBuf := ""
+
+		loop osd.MaxLines {
+			if (!FadingStates[A_Index])
+				RowWins[A_Index].Hide()
+		}
+		return
+	}
+
+	start := Max(1, allLines.Length - osd.MaxLines + 1)
+	visLines := []
+	visSpecial := []
+	loop (allLines.Length - start + 1) {
+		visLines.Push(allLines[start + A_Index - 1])
+		visSpecial.Push(allSpecial[start + A_Index - 1])
+	}
+
+	total := visLines.Length
+	activeIdx := total
+
+	specialLh := MeasureTextHeight(osd.FontName, osd.FontSize, osd.FontBold, osd.FontItalic)
+		+ 2 * (osd.SpecialBorderWidth + osd.SpecialTextPad)
+
+	rowHeights := []
+	loop total {
+		li := A_Index
+		isAct := (li = activeIdx)
+		isSpec := isAct && visSpecial[li]
+		rowHeights.Push(isSpec ? specialLh : (isAct ? osd.LineHeight : osd.HistLineHeight))
+	}
+
+	totalH := 0
+	loop total {
+		totalH += rowHeights[A_Index]
+		if (A_Index < total)
+			totalH += osd.LineGap
+	}
+
+	widths := []
+
+	if (!osd.AutoWidth) {
+		defaultW := Min(osd.Width, OSD_MaxWidth)
+		loop total
+			widths.Push(defaultW)
+	} else {
+		loop total {
+			idx := A_Index
+			fs := (idx = activeIdx) ? osd.FontSize : osd.HistFontSize
+			tw := MeasureTextWidth(visLines[idx], osd.FontName, fs, osd.FontBold, osd.FontItalic)
+			tw += osd.PaddingX * 2
+			widths.Push(Min(tw, OSD_MaxWidth))
+		}
+	}
+
+	if (osd.AutoWidth)
+		osd.MaxTyping := Max(10, Floor((OSD_MaxWidth - osd.PaddingX * 2) / (osd.FontSize * CHAR_WIDTH_RATIO)))
+
+	baseY := CalcStackBase(mon, totalH)[2]
+
+	yOffset := 0
+	winIdx := 1
+
+	loop total {
+		while (winIdx <= osd.MaxLines && FadingStates[winIdx])
+			winIdx++
+		if (winIdx > osd.MaxLines)
+			break
+
+		idx := A_Index
+		isActive := (idx = activeIdx)
+		isSpecial := isActive && visSpecial[idx]
+		lh := rowHeights[idx]
+		alpha := isSpecial ? osd.SpecialAlpha : (isActive ? osd.BgAlpha : osd.HistAlpha)
+		clr := isSpecial ? osd.SpecialTextColor : (isActive ? osd.TextColor : osd.HistTextColor)
+		bgClr := isSpecial ? osd.SpecialBorderColor : (isActive ? osd.BgColor : osd.HistBgColor)
+
+		w := RowWins[winIdx]
+		lbl := RowLabels[winIdx]
+		pic := RowPics[winIdx]
+
+		static lastOpts := Map()
+		static lastBgClr := Map()
+		static lastClr := Map()
+		static lastText := Map()
+		static lastGeom := Map()
+		static lastAlpha := Map()
+
+		if !lastBgClr.Has(winIdx) || lastBgClr[winIdx] != bgClr {
+			w.BackColor := bgClr
+			lastBgClr[winIdx] := bgClr
+		}
+
+		opts := isActive ? activeOptions : histOptions
+
+		if !lastOpts.Has(winIdx) || lastOpts[winIdx] != opts {
+			lbl.SetFont(opts, osd.FontName)
+			lastOpts[winIdx] := opts
+		}
+
+
+		styleKey := clr "|" isSpecial
+		if !lastClr.Has(winIdx) || lastClr[winIdx] != styleKey {
+			lbl.Opt("c" clr " BackgroundTrans" (isSpecial ? " +0x200" : " -0x200"))
+			lastClr[winIdx] := styleKey
+		}
+
+		rowW := widths[idx]
+		rowBaseX := CalcStackBase(mon, totalH, rowW)[1]
+		rowY := baseY + yOffset
+		geomKey := rowBaseX "," rowY "," rowW "," lh "," isSpecial
+
+		needsShow := (!RowReady[winIdx] || !DllCall("IsWindowVisible", "Ptr", w.Hwnd) || !lastGeom.Has(winIdx) || lastGeom[winIdx] != geomKey)
+		if (needsShow) {
+			if (isSpecial) {
+				badgeKey := rowW "," lh
+				if !SpecialBadgeCache.Has(badgeKey)
+					SpecialBadgeCache[badgeKey] := MakeRoundedBadgeBitmap(rowW, lh,
+						osd.SpecialBorderColor, osd.SpecialBgColor, osd.SpecialBorderWidth, SPECIAL_OUTER_RADIUS)
+				pic.Move(0, 0, rowW, lh)
+				pic.Value := "HBITMAP:*" SpecialBadgeCache[badgeKey]
+				pic.Visible := true
+				pic.Redraw()
+				lbl.Move(0, osd.SpecialTextYNudge, rowW, lh - osd.SpecialTextYNudge)
+			} else {
+				pic.Visible := false
+				lbl.Move(0, osd.PaddingYTop, rowW, lh - osd.PaddingYTop - osd.PaddingYBottom)
+			}
+			w.Show("NA x" (rowBaseX) " y" (rowY) " w" rowW " h" lh)
+			lastGeom[winIdx] := geomKey
+		}
+
+		text := visLines[idx]
+		if !lastText.Has(winIdx) || lastText[winIdx] != text {
+			lbl.Text := text
+			lastText[winIdx] := text
+		}
+
+		if (!FadingStates[winIdx]) {
+			FadeAlphas[winIdx] := alpha
+			if !RowReady[winIdx]
+				InitWin(winIdx, alpha)
+			else if (needsShow || !lastAlpha.Has(winIdx) || lastAlpha[winIdx] != alpha) {
+				WinSetTransparent(alpha, w.Hwnd)
+				lastAlpha[winIdx] := alpha
+			}
+		}
+
+		yOffset += lh + osd.LineGap
+		winIdx++
+	}
+
+	loop (osd.MaxLines - winIdx + 1) {
+		i := winIdx + A_Index - 1
+		if (!FadingStates[i])
+			RowWins[i].Hide()
+	}
+}
+
+PushLine(line, isSpecial := false) {
+	global osd
+
+
+	if (Trim(line) = "")
+		return
+
+	osd.State.Lines.Push(OSDLine(line, isSpecial))
+	while (osd.State.Lines.Length > osd.MaxLines)
+		osd.State.Lines.RemoveAt(1)
+	SetTimer(CheckExpiredLines, 100)
+}
+
+FlushTyping(isTimeout := false) {
+	global osd
+	SetTimer(FlushTypingTimeout, 0)
+
+	if (osd.State.TypingBuf != "") {
+		line := osd.State.TypingBuf
+		osd.State.TypingBuf := ""
+		osd.State.LastKey := ""
+		beforeCount := osd.State.Lines.Length
+		PushLine(line)
+		if (isTimeout && osd.State.Lines.Length > beforeCount)
+			osd.State.Lines[osd.State.Lines.Length].CreatedAt := A_TickCount - osd.DisplayTime
+		RenderOSD()
+	}
+}
+
+FlushTypingTimeout() {
+	FlushTyping(true)
+}
+
+FindLastWordBreak(text) {
+	lastBreak := 0
+	loop StrLen(text) {
+		ch := SubStr(text, A_Index, 1)
+		if (ch = " " || ch = A_Tab)
+			lastBreak := A_Index
+	}
+	return lastBreak
+}
+
+TokensSubsetOf(subLabel, fullLabel) {
+	fullParts := StrSplit(fullLabel, " + ")
+	for tok in StrSplit(subLabel, " + ") {
+		found := false
+		for f in fullParts {
+			if (f = tok) {
+				found := true
+				break
+			}
+		}
+		if !found
+			return false
+	}
+	return true
+}
+
+WrapTypingBuffer(nextText) {
+	global osd
+	candidate := osd.State.TypingBuf . nextText
+	breakAt := FindLastWordBreak(candidate)
+	if (breakAt > 1) {
+		line := RTrim(SubStr(candidate, 1, breakAt - 1))
+		rest := LTrim(SubStr(candidate, breakAt + 1))
+		if (line != "")
+			PushLine(line)
+		osd.State.TypingBuf := rest
+		return
+	}
+	FlushTyping()
+	osd.State.TypingBuf := nextText
+}
+
+StartFade(winIdx) {
+	global RowWins, FadingStates, FadeTimers
+	if (FadingStates[winIdx])
+		return
+	w := RowWins[winIdx]
+	if (!DllCall("IsWindowVisible", "Ptr", w.Hwnd))
+		return
+
+	FadingStates[winIdx] := true
+	FadeTimers[winIdx] := FadeStep.Bind(winIdx)
+	SetTimer(FadeTimers[winIdx], 16)
+}
+
+FadeStep(winIdx) {
+	global RowWins, FadingStates, FadeTimers, FadeAlphas
+	if (!FadingStates[winIdx])
+		return
+
+	w := RowWins[winIdx]
+	FadeAlphas[winIdx] -= 8
+
+	if (FadeAlphas[winIdx] <= 0) {
+		SetTimer(FadeTimers[winIdx], 0)
+		FadeTimers[winIdx] := 0
+		w.Hide()
+		FadingStates[winIdx] := false
+		return
+	}
+	WinSetTransparent(FadeAlphas[winIdx], w.Hwnd)
+}
+
+CancelAllFades() {
+	global RowWins, FadingStates, FadeTimers
+
+	loop osd.MaxLines {
+		idx := A_Index
+		if (FadingStates[idx]) {
+			SetTimer(FadeTimers[idx], 0)
+			FadeTimers[idx] := 0
+			RowWins[idx].Hide()
+			FadingStates[idx] := false
+		}
+	}
+}
+
+CheckExpiredLines() {
+	global osd, RowWins, FadingStates
+
+	if (osd.State.Lines.Length = 0) {
+		SetTimer(CheckExpiredLines, 0)
+		return
+	}
+
+	visibleCount := osd.State.Lines.Length
+
+	if (osd.State.TypingBuf = "") {
+		if (visibleCount > 0 && osd.State.Lines[visibleCount].IsExpired(osd.DisplayTime)) {
+			FadeLastVisibleRow()
+			osd.State.Lines.RemoveAt(visibleCount)
+			if (osd.State.Lines.Length > 0)
+				osd.State.Lines[osd.State.Lines.Length].CreatedAt := A_TickCount
+			return
+		}
+	}
+
+	historyCount := (osd.State.TypingBuf = "") ? visibleCount - 1 : visibleCount
+	loop historyCount {
+		idx := A_Index
+		if (osd.State.Lines[idx].IsExpired(osd.DismissDelay)) {
+			FadeFirstVisibleRow()
+			osd.State.Lines.RemoveAt(idx)
+			return
+		}
+	}
+}
+
+FadeFirstVisibleRow() {
+	global RowWins, FadingStates
+	loop RowWins.Length {
+		if (DllCall("IsWindowVisible", "Ptr", RowWins[A_Index].Hwnd) && !FadingStates[A_Index]) {
+			StartFade(A_Index)
+			return
+		}
+	}
+}
+
+FadeLastVisibleRow() {
+	global RowWins, FadingStates
+	loop RowWins.Length {
+		idx := RowWins.Length - A_Index + 1
+		if (DllCall("IsWindowVisible", "Ptr", RowWins[idx].Hwnd) && !FadingStates[idx]) {
+			StartFade(idx)
+			return
+		}
+	}
+}
+
+ResetOSDState() {
+	global osd
+	CancelAllFades()
+	SetTimer(CheckExpiredLines, 0)
+	SetTimer(FlushTypingTimeout, 0)
+	osd.State.LastKey := ""
+	osd.State.Lines := []
+	osd.State.TypingBuf := ""
+	osd.State.PendingMod := ""
+	osd.State.PendingComposeTap := ""
+	osd.State.PendingDismiss := 0
+}
+
+IsOSDVisible() {
+	global RowWins, osd
+	loop osd.MaxLines {
+		if DllCall("IsWindowVisible", "Ptr", RowWins[A_Index].Hwnd)
+			return true
+	}
+	return false
+}
+
+HideOSD() {
+	global RowWins, osd
+	CancelAllFades()
+	SetTimer(CheckExpiredLines, 0)
+	SetTimer(CommitPendingMod, 0)
+
+	loop osd.MaxLines
+		RowWins[A_Index].Hide()
+
+	ResetOSDState()
+}
