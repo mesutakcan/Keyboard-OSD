@@ -3,7 +3,7 @@
 [![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.4-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
+[![Version](https://img.shields.io/badge/Version-1.5-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
 
 ![GitHub stars](https://img.shields.io/github/stars/mesutakcan/Keyboard-OSD?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/mesutakcan/Keyboard-OSD?style=social)
@@ -17,7 +17,7 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and s
 ## Features
 
 - Shows your typed text and shortcut combinations on screen in real time.
-- Shortcuts and modifier keys (like `Ctrl+C` or `Shift`) appear as eye-catching badges, clearly separated from regular typed text.
+- Shortcuts and modifier keys (like <kbd>Ctrl+C</kbd> or <kbd>Shift</kbd>) appear as eye-catching badges, clearly separated from regular typed text.
 - Repeated key presses are grouped together with a counter instead of cluttering the screen.
 - Keeps a short history of recent keys, with each line fading out on its own timer.
 - Optional word wrap for longer typed text, and natural Backspace handling while typing.
@@ -27,7 +27,7 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and s
 - Fully customizable from a settings window: colors, fonts, size, transparency, position, margins, padding, and timing — all with a live preview.
 - Smooth fade-out animations and optional rounded corners.
 - History lines can have their own font size, colors, and transparency, separate from the active line.
-- Pause and resume anytime with **`Ctrl+Shift+F8`** or from the tray menu.
+- Pause and resume anytime with **<kbd>Ctrl+Shift+F8</kbd>** or from the tray menu.
 - Compiled version is a single portable `.exe` — no separate icon files or installation needed.
 
 ## Requirements
@@ -40,13 +40,13 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and s
 
 | File | Description |
 |---|---|
-| `keyboard-osd.ahk` | Main script — key watcher, OSD rendering, state management, tray menu |
-| `lib.ahk` | Helper library — text measurement (GDI), badge rendering (GDI+), monitor detection, fade animation, window helpers, INI read |
-| `settings-gui.ahk` | Settings window with tabbed layout and live preview |
-| `commonDialog.ahk` | Windows standard Font (ChooseFontW) and Color (ChooseColorW) dialog wrappers |
-| `settings.ini` | User settings (auto-created on first save) |
-| `app_icon.ico` | Tray icon — active state (source version only) |
-| `app_icon_pause.ico` | Tray icon — paused state (source version only) |
+| `keyboard-osd.ahk` | Main script — handles the tray menu and displays your keystrokes on screen |
+| `lib.ahk` | Supporting code for rendering and window behavior |
+| `settings-gui.ahk` | The settings window, with live preview |
+| `commonDialog.ahk` | Windows font and color picker windows |
+| `settings.ini` | Your saved settings (created automatically the first time you save) |
+| `app_icon.ico` | Tray icon shown while the OSD is active (source version only) |
+| `app_icon_pause.ico` | Tray icon shown while the OSD is paused (source version only) |
 
 ## Usage
 
@@ -75,7 +75,7 @@ The application runs in the system tray. Right-click the tray icon to open:
 - `Pause OSD` — pause or resume the OSD
 - `Exit` — close the application
 
-You can also toggle pause with the keyboard shortcut **`Ctrl+Shift+F8`**.
+You can also toggle pause with the keyboard shortcut **<kbd>Ctrl+Shift+F8</kbd>**.
 
 ## Settings
 
@@ -104,7 +104,7 @@ All options can be changed from the tabbed settings window. Changes are saved to
 - History background transparency
 
 ### Special
-Controls the appearance of shortcut and modifier key badges (e.g. `Ctrl+C`, `Shift`, `Escape`, `Tab`):
+Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</kbd>, <kbd>Shift</kbd>, <kbd>Escape</kbd>, <kbd>Tab</kbd>):
 
 - Border color, fill color, text color
 - Badge transparency (alpha)
@@ -120,44 +120,50 @@ Controls the appearance of shortcut and modifier key badges (e.g. `Ctrl+C`, `Shi
 
 ## Notes
 
-- The script requires AutoHotkey v2 and will not run on AutoHotkey v1.
-- The OSD follows the active monitor's work area, excluding the taskbar.
-- Line height is calculated automatically from the actual GDI font metrics; it is not a manual setting.
-- Badge bitmaps for special keys are rendered using GDI+ and cached for performance.
-- Some keyboard behavior may depend on the active keyboard layout.
-- When running the compiled version, icons are embedded in the executable (main icon via `SetMainIcon`, pause icon as Resource ID 207). When running from source, `app_icon.ico` and `app_icon_pause.ico` must be present in the script directory.
-- Font and text width measurement use the Windows GDI API for pixel-accurate results.
+- Running from source requires AutoHotkey v2; it will not work with the older AutoHotkey v1.
+- The OSD automatically appears on whichever monitor your active window is on, and stays clear of the taskbar.
+- Row height adjusts automatically to your chosen font, so text is never cropped or oddly spaced.
+- Shortcut and modifier badges are cached for smooth performance, even with frequent key presses.
+- Keystroke display may vary slightly depending on your active keyboard layout.
+- The compiled `.exe` has all icons built in, so it works standalone. When running from source, keep `app_icon.ico` and `app_icon_pause.ico` in the same folder as the script.
+- Text is measured precisely so it always fits and aligns cleanly on screen.
 
 ## History
+
+### Version 1.5 (2026-07-15)
+
+**New:**
+- The Windows (<kbd>Win</kbd>)  key can now be shown on its own as a badge, just like <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, and <kbd>Alt</kbd>.
+- Improved <kbd>AltGr</kbd> and <kbd>Shift</kbd> handling: when a key combination produces a character, that character now appears in the typed text as expected. When it doesn't produce a character, the badge shows the key combination itself (e.g. <kbd>AltGr + K</kbd>).
+- Holding down multiple modifier keys in sequence now updates the badge smoothly to show the full combination, instead of showing a separate badge for each stage.
+
+**Fixes:**
+- A lone modifier badge (e.g. just "Shift") no longer lingers on screen after you start typing.
+
+---
 
 ### Version 1.4 (2026-07-11)
 
 **New:**
 - Shortcut and modifier key presses now appear as styled badges with a rounded border, fill color, and their own transparency — making them instantly stand out from regular typed text.
 - Added a new **Special** tab in the settings window to customize badge colors, border, padding, and text position, with a live preview.
-- Badge rendering is now cached, keeping the OSD smooth even with frequent shortcut presses.
+- Smoother performance when pressing shortcuts frequently.
 
 ---
 
 ### Version 1.3 (2026-07-02)
 
-**Architecture:**
-- Refactored into `OSDSettings` and `OSDState` classes for cleaner state management.
-- Extracted all helper functions into a dedicated `lib.ahk` file.
-- INI file reorganized into four named sections: `[Appearance]`, `[Layout]`, `[History]`, `[Timing]`.
-
 **New:**
-- Each OSD line is now an `OSDLine` object with its own `CreatedAt` timestamp, repeat counter, and `IsExpired()` check — active line and history lines expire independently.
-- Non-blocking per-row fade system using `FadingStates` / `FadeTimers` arrays.
-- `CheckExpiredLines` timer replaces the `StartDismiss` / `DismissNext` chain.
-- `FlushTypingTimeout` — typed text is automatically committed after `DisplayTime` ms of inactivity.
-- `MeasureTextHeight` — line height is now calculated from real GDI font metrics.
-- Pause/resume keyboard shortcut `Ctrl+Shift+F8`.
-- Settings GUI switched from GroupBox layout to a tabbed layout.
-- Added `PaddingX`, `PaddingYTop`, `PaddingYBottom` layout settings.
+- Active line and history lines now disappear independently, each on its own timer, for more natural timing.
+- Row fade-outs are smoother and no longer interrupt typing while they play.
+- Typed text is now automatically finalized after a short pause, instead of waiting indefinitely.
+- Row height is now calculated automatically from your chosen font, so text always fits cleanly.
+- Added a pause/resume keyboard shortcut: <kbd>Ctrl+Shift+F8</kbd>.
+- Settings window redesigned with a cleaner tabbed layout.
+- Added fine-grained padding controls for each row (left/right, top, bottom).
 
 **Fixes:**
-- Fade no longer blocks the key watcher thread.
+- Fade animations no longer cause typing to lag or stutter.
 
 ---
 
