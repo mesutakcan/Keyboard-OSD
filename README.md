@@ -14,6 +14,8 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and s
 
 ![Keyboard OSD demo](docs/ss_keyboard_osd.gif)
 
+Keyboard OSD Demo video: https://youtu.be/UvLldgMmC-Q
+
 ## Features
 
 - Shows your typed text and shortcut combinations on screen in real time.
