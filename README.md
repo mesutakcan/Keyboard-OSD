@@ -147,7 +147,7 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 
 ## History
 
-### Version 1.6 (2026-07-26)
+### Version 1.6 (2026-08-26)
 
 - Added a **Filters** settings page for excluding key categories, individual characters, modifiers, and custom key combinations.
 - Added a **Hotkeys** settings page for configuring the pause/resume and hide-OSD shortcuts.
