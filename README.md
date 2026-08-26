@@ -85,7 +85,7 @@ You can also toggle pause or hide the OSD with the configurable hotkeys in the *
 
 ## Settings
 
-All options can be changed from the tabbed settings window. Changes are saved to `settings.ini` and the script reloads automatically to apply them.
+All options can be changed from the settings window, organized into categories in the sidebar. Changes are saved to `settings.ini` and the script reloads automatically to apply them.
 
 ![Settings window](docs/ss_settings.gif)
 
@@ -153,6 +153,10 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 - Added a **Hotkeys** settings page for configuring the pause/resume and hide-OSD shortcuts.
 - Added a **Hide OSD** tray command and hotkey to instantly hide all visible rows.
 - Added an option to keep shortcut and modifier badge styling when lines move into history.
+- Settings window navigation redesigned: a category list on the left replaces the old tabs.
+
+**Fixes:**
+- Fixed occasional flickering while typing.
 
 ---
 
