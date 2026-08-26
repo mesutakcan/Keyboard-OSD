@@ -12,9 +12,10 @@ class FontDialog {
 	; strikeout: [in/out] bool
 	; color: [in/out] RGB hex string
 	; charSet: [in/out] lfCharSet byte (e.g. 162 = Turkish, 1 = Default)
+	; effects: show color/underline/strikeout options in the dialog (set false to hide them)
 	; Returns true if OK was clicked, false if cancelled.
 
-	static Choose(hwndOwner, &fontName, &fontSize, &bold, &italic, &underline, &strikeout, &color, &charSet := 1) {
+	static Choose(hwndOwner, &fontName, &fontSize, &bold, &italic, &underline, &strikeout, &color, &charSet := 1, effects := true) {
 		static LOGFONT_SIZE := 92 ; LOGFONTW: 28 bytes header + 64 bytes face (32 WCHARs)
 		static CF_SIZE_32 := 64 ; CHOOSEFONTW: 28 bytes header + 32 bytes LOGFONTW + 4 bytes COLORREF
 		static CF_SIZE_64 := 104 ; CHOOSEFONTW: 40 bytes header + 32 bytes LOGFONTW + 4 bytes COLORREF
@@ -40,8 +41,9 @@ class FontDialog {
 		NumPut("UInt", CF_SIZE, CF, 0) ; lStructSize
 		NumPut("Ptr", hwndOwner, CF, A_PtrSize) ; hwndOwner
 		NumPut("Ptr", LF.Ptr, CF, A_PtrSize * 3) ; lpLogFont
-		; CF_SCREENFONTS=0x1 | CF_INITTOLOGFONTSTRUCT=0x40 | CF_EFFECTS=0x100 -> 0x141
-		NumPut("UInt", 0x141, CF, A_PtrSize * 4 + 4) ; Flags
+		; CF_SCREENFONTS=0x1 | CF_INITTOLOGFONTSTRUCT=0x40 | CF_EFFECTS=0x100
+		flags := 0x41 | (effects ? 0x100 : 0)
+		NumPut("UInt", flags, CF, A_PtrSize * 4 + 4) ; Flags
 
 		; Convert RGB hex string to BGR integer for COLORREF
 		initColorBGR := 0

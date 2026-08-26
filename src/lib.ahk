@@ -188,48 +188,142 @@ InitWin(idx, alpha) {
 	RowReady[idx] := true
 }
 
-FadeOutWin(guiObj, duration := 250) {
-	hwnd := guiObj.Hwnd
-	if !DllCall("IsWindowVisible", "Ptr", hwnd)
-		return
-
-	if (guiObj.HasProp("Fading") && guiObj.Fading)
-		return
-
-	guiObj.Fading := true
-	origAlpha := 0
-	DllCall("GetLayeredWindowAttributes", "Ptr", hwnd, "Ptr", 0, "UChar*", &origAlpha, "Ptr", 0)
-	if (origAlpha = 0)
-		origAlpha := 255
-
-	steps := 10
-	stepMs := Max(1, Round(duration / steps))
-	currentStep := 0
-
-	FadeTick() {
-		if (!guiObj.HasProp("Fading") || !guiObj.Fading) {
-			SetTimer(, 0)
-			return
-		}
-
-		currentStep++
-		if (currentStep <= steps) {
-			newAlpha := Round(origAlpha * (steps - currentStep) / steps)
-			WinSetTransparent(newAlpha, hwnd)
-		} else {
-			SetTimer(, 0)
-			guiObj.Hide()
-			WinSetTransparent(origAlpha, hwnd)
-			guiObj.Fading := false
-		}
-	}
-
-	SetTimer(FadeTick, stepMs)
-}
-
 ReadIni(Key, Def, asInt := false, Section := "Appearance") {
 	Val := IniRead(IniFile, Section, Key, Def)
 	return asInt ? Number(Val) : Val
+}
+
+ParseKeyCombo(raw) {
+	entry := Trim(raw)
+	if (entry = "")
+		return ""
+
+	mods := Map("Ctrl", false, "Shift", false, "Alt", false, "Win", false, "AltGr", false)
+
+	if (entry = "AltGr") {
+		mods["AltGr"] := true
+		entry := ""
+	} else if (SubStr(entry, 1, 6) = "AltGr+") {
+		mods["AltGr"] := true
+		entry := SubStr(entry, 7)
+	} else {
+		loop {
+			ch := SubStr(entry, 1, 1)
+			if (ch = "^")
+				mods["Ctrl"] := true
+			else if (ch = "+")
+				mods["Shift"] := true
+			else if (ch = "!")
+				mods["Alt"] := true
+			else if (ch = "#")
+				mods["Win"] := true
+			else
+				break
+			entry := SubStr(entry, 2)
+		}
+	}
+
+	if (entry = "")
+		return ""
+
+	return { mods: mods, key: entry }
+}
+
+LoadExcludedKeys() {
+	list := []
+	section := ""
+	try section := IniRead(IniFile, "ExcludedKeys")
+	if (section = "")
+		return list
+
+	for line in StrSplit(section, "`n", "`r") {
+		line := Trim(line)
+		if (line = "")
+			continue
+		eq := InStr(line, "=")
+		val := eq ? SubStr(line, eq + 1) : line
+		combo := ParseKeyCombo(val)
+		if (combo != "")
+			list.Push(combo)
+	}
+	return list
+}
+
+IsKeyExcluded(hasCtrl, hasShift, hasAlt, hasWin, isAltGr, keyName, foundVK := 0) {
+	global ExcludedKeyList, SystemExcludedKeyList, osd
+	hasShift := !!hasShift
+	hasWin := !!hasWin
+	curCtrl := hasCtrl && !isAltGr
+	curAlt := hasAlt && !isAltGr
+	hasAnyMod := (curCtrl || hasShift || curAlt || hasWin || isAltGr)
+
+	if (osd.FilterModifiers && osd.FilterModifierMode = "Group" && hasAnyMod)
+		return true
+
+	if IsKeyExcludedByCategory(keyName, foundVK)
+		return true
+
+	if IsKeyInList(SystemExcludedKeyList, isAltGr, curCtrl, hasShift, curAlt, hasWin, keyName)
+		return true
+
+	if (osd.FilterCustomList && IsKeyInList(ExcludedKeyList, isAltGr, curCtrl, hasShift, curAlt, hasWin, keyName))
+		return true
+
+	return false
+}
+
+IsKeyInList(list, isAltGr, curCtrl, hasShift, curAlt, hasWin, keyName) {
+	for combo in list {
+		if (StrLower(combo.key) != StrLower(keyName))
+			continue
+		m := combo.mods
+		if (m["AltGr"] != isAltGr)
+			continue
+		if (m["Ctrl"] != curCtrl)
+			continue
+		if (m["Shift"] != hasShift)
+			continue
+		if (m["Alt"] != curAlt)
+			continue
+		if (m["Win"] != hasWin)
+			continue
+		return true
+	}
+	return false
+}
+
+IsKeyExcludedByCategory(keyName, foundVK := 0) {
+	global osd
+
+	if (osd.FilterFunctionKeys && RegExMatch(keyName, "^F(1[0-9]|2[0-4]|[1-9])$"))
+		return true
+
+	if (osd.FilterNumpad && (SubStr(keyName, 1, 6) = "Numpad" || keyName = "NumLock"))
+		return true
+
+	if (osd.FilterLetters && foundVK >= 0x41 && foundVK <= 0x5A)
+		return true
+
+	if (osd.FilterOtherLetters && osd.FilterOtherLettersChars != "" && StrLen(keyName) = 1
+		&& InStr(osd.FilterOtherLettersChars, keyName, true))
+		return true
+
+	if (osd.FilterDigits && RegExMatch(keyName, "^[0-9]$"))
+		return true
+
+	if (osd.FilterArrows && (keyName = "Up" || keyName = "Down" || keyName = "Left" || keyName = "Right"))
+		return true
+
+	if (osd.FilterNavKeys && (keyName = "Home" || keyName = "End" || keyName = "PgUp" || keyName = "PgDn"
+		|| keyName = "Insert" || keyName = "Ins" || keyName = "Delete"))
+		return true
+
+	return false
+}
+
+IsModifierTapExcluded() {
+	global osd
+	return (osd.FilterModifiers && osd.FilterModifierMode = "Alone")
 }
 
 global GdipToken := 0
@@ -251,6 +345,13 @@ ShutdownGdiplus(*) {
 	}
 }
 
+ClearBadgeCache(*) {
+	global SpecialBadgeCache
+	for badgeKey, hBmp in SpecialBadgeCache
+		DllCall("DeleteObject", "Ptr", hBmp)
+	SpecialBadgeCache.Clear()
+}
+
 _InRoundRect(px, py, left, top, right, bottom, r) {
 	if (px < left || px > right || py < top || py > bottom)
 		return false
@@ -266,10 +367,13 @@ RenderPreviewBadge(picCtrl, w, h, fillHex, alpha, borderHex := "", borderWidth :
 	if (picCtrl.HasProp("_hBmp") && picCtrl._hBmp != 0)
 		DllCall("DeleteObject", "Ptr", picCtrl._hBmp)
 
+	fillHex := _SafeHex(fillHex)
 	fr := Integer("0x" SubStr(fillHex, 1, 2)), fg := Integer("0x" SubStr(fillHex, 3, 2)), fb := Integer("0x" SubStr(fillHex, 5, 2))
 	hasBorder := (borderWidth > 0 && borderHex != "")
-	if hasBorder
+	if hasBorder {
+		borderHex := _SafeHex(borderHex)
 		br := Integer("0x" SubStr(borderHex, 1, 2)), bg := Integer("0x" SubStr(borderHex, 3, 2)), bb := Integer("0x" SubStr(borderHex, 5, 2))
+	}
 	aa := Number(alpha) & 0xFF
 	innerR := Max(0, radius - borderWidth)
 	ss := (radius > 0) ? 3 : 1
@@ -320,6 +424,8 @@ RenderPreviewBadge(picCtrl, w, h, fillHex, alpha, borderHex := "", borderWidth :
 
 
 BlendHexColor(fgHex, bgHex, alpha) {
+	fgHex := _SafeHex(fgHex)
+	bgHex := _SafeHex(bgHex)
 	a := Number(alpha) / 255
 	fr := Integer("0x" SubStr(fgHex, 1, 2)), fg := Integer("0x" SubStr(fgHex, 3, 2)), fb := Integer("0x" SubStr(fgHex, 5, 2))
 	br := Integer("0x" SubStr(bgHex, 1, 2)), bgc := Integer("0x" SubStr(bgHex, 3, 2)), bb := Integer("0x" SubStr(bgHex, 5, 2))
@@ -327,6 +433,15 @@ BlendHexColor(fgHex, bgHex, alpha) {
 	gg := Round(fg * a + bgc * (1 - a))
 	bb2 := Round(fb * a + bb * (1 - a))
 	return Format("{:02X}{:02X}{:02X}", rr, gg, bb2)
+}
+
+_SafeHex(hex) {
+	clean := RegExReplace(hex, "[^0-9A-Fa-f]")
+	if (StrLen(clean) > 6)
+		clean := SubStr(clean, 1, 6)
+	loop 6 - StrLen(clean)
+		clean := "0" clean
+	return StrUpper(clean)
 }
 
 MakeRoundedBadgeBitmap(w, h, borderHex, bgHex, borderWidth, outerRadius) {
@@ -367,7 +482,7 @@ MakeRoundedBadgeBitmap(w, h, borderHex, bgHex, borderWidth, outerRadius) {
 }
 
 HexToARGB(hex) {
-	hex := RegExReplace(hex, "[^0-9A-Fa-f]")
+	hex := _SafeHex(RegExReplace(hex, "[^0-9A-Fa-f]"))
 	rr := Integer("0x" SubStr(hex, 1, 2))
 	gg := Integer("0x" SubStr(hex, 3, 2))
 	bb := Integer("0x" SubStr(hex, 5, 2))
@@ -387,7 +502,7 @@ HideOSDInstant() {
 }
 
 RenderOSD(extraLine := "") {
-	global RowWins, RowLabels, RowReady, osd, CachedMaxWidth, FadingStates, FadeAlphas
+	global RowWins, RowLabels, RowReady, osd, CachedMaxWidth, FadingStates, FadeAlphas, CHAR_WIDTH_RATIO
 
 	static lastMonW := 0
 	mon := GetActiveMonitorBounds()
@@ -434,8 +549,8 @@ RenderOSD(extraLine := "") {
 	total := visLines.Length
 	activeIdx := total
 
-	specialLh := MeasureTextHeight(osd.FontName, osd.FontSize, osd.FontBold, osd.FontItalic)
-		+ 2 * (osd.SpecialBorderWidth + osd.SpecialTextPad)
+	specialLh := MeasureTextHeight(osd.SpecialFontName, osd.SpecialFontSize, osd.SpecialFontBold, osd.SpecialFontItalic)
+		+ 2 * (osd.SpecialBorderWidth + osd.SpecialTextPadY)
 
 	rowHeights := []
 	loop total {
@@ -461,17 +576,26 @@ RenderOSD(extraLine := "") {
 	} else {
 		loop total {
 			idx := A_Index
-			fs := (idx = activeIdx) ? osd.FontSize : osd.HistFontSize
-			tw := MeasureTextWidth(visLines[idx], osd.FontName, fs, osd.FontBold, osd.FontItalic)
-			tw += osd.PaddingX * 2
+			isAct := (idx = activeIdx)
+			isSpec := isAct && visSpecial[idx]
+			if (isSpec)
+				fname := osd.SpecialFontName, fs := osd.SpecialFontSize, fb := osd.SpecialFontBold, fi := osd.SpecialFontItalic, pad := osd.SpecialBorderWidth + osd.SpecialTextPadX
+			else if (isAct)
+				fname := osd.FontName, fs := osd.FontSize, fb := osd.FontBold, fi := osd.FontItalic, pad := osd.TextPadX
+			else
+				fname := osd.HistFontName, fs := osd.HistFontSize, fb := osd.HistFontBold, fi := osd.HistFontItalic, pad := osd.HistTextPadX
+			tw := MeasureTextWidth(visLines[idx], fname, fs, fb, fi)
+			tw += pad * 2
 			widths.Push(Min(tw, OSD_MaxWidth))
 		}
 	}
 
 	if (osd.AutoWidth)
-		osd.MaxTyping := Max(10, Floor((OSD_MaxWidth - osd.PaddingX * 2) / (osd.FontSize * CHAR_WIDTH_RATIO)))
+		osd.MaxTyping := Max(10, Floor((OSD_MaxWidth - osd.TextPadX * 2) / (osd.FontSize * CHAR_WIDTH_RATIO)))
 
 	baseY := CalcStackBase(mon, totalH)[2]
+
+	EnsureWindowCapacity(total)
 
 	yOffset := 0
 	winIdx := 1
@@ -485,10 +609,12 @@ RenderOSD(extraLine := "") {
 		idx := A_Index
 		isActive := (idx = activeIdx)
 		isSpecial := isActive && visSpecial[idx]
+		isSpecialHist := !isActive && visSpecial[idx] && osd.SpecialKeepStyleInHistory
 		lh := rowHeights[idx]
 		alpha := isSpecial ? osd.SpecialAlpha : (isActive ? osd.BgAlpha : osd.HistAlpha)
-		clr := isSpecial ? osd.SpecialTextColor : (isActive ? osd.TextColor : osd.HistTextColor)
-		bgClr := isSpecial ? osd.SpecialBorderColor : (isActive ? osd.BgColor : osd.HistBgColor)
+		clr := isSpecial ? osd.SpecialTextColor : (isSpecialHist ? osd.SpecialTextColor : (isActive ? osd.TextColor : osd.HistTextColor))
+		bgClr := isSpecial ? osd.SpecialBorderColor : (isSpecialHist ? osd.SpecialBgColor : (isActive ? osd.BgColor : osd.HistBgColor))
+		fontNameRow := isSpecial ? osd.SpecialFontName : (isActive ? osd.FontName : osd.HistFontName)
 
 		w := RowWins[winIdx]
 		lbl := RowLabels[winIdx]
@@ -506,17 +632,18 @@ RenderOSD(extraLine := "") {
 			lastBgClr[winIdx] := bgClr
 		}
 
-		opts := isActive ? activeOptions : histOptions
+		opts := isSpecial ? specialOptions : (isActive ? activeOptions : histOptions)
+		optsKey := opts "|" fontNameRow
 
-		if !lastOpts.Has(winIdx) || lastOpts[winIdx] != opts {
-			lbl.SetFont(opts, osd.FontName)
-			lastOpts[winIdx] := opts
+		if !lastOpts.Has(winIdx) || lastOpts[winIdx] != optsKey {
+			lbl.SetFont(opts, fontNameRow)
+			lastOpts[winIdx] := optsKey
 		}
 
 
-		styleKey := clr "|" isSpecial
+		styleKey := clr
 		if !lastClr.Has(winIdx) || lastClr[winIdx] != styleKey {
-			lbl.Opt("c" clr " BackgroundTrans" (isSpecial ? " +0x200" : " -0x200"))
+			lbl.Opt("c" clr " BackgroundTrans +0x200")
 			lastClr[winIdx] := styleKey
 		}
 
@@ -539,7 +666,8 @@ RenderOSD(extraLine := "") {
 				lbl.Move(0, osd.SpecialTextYNudge, rowW, lh - osd.SpecialTextYNudge)
 			} else {
 				pic.Visible := false
-				lbl.Move(0, osd.PaddingYTop, rowW, lh - osd.PaddingYTop - osd.PaddingYBottom)
+				nudge := isActive ? osd.TextYNudge : osd.HistTextYNudge
+				lbl.Move(0, nudge, rowW, lh - nudge)
 			}
 			w.Show("NA x" (rowBaseX) " y" (rowY) " w" rowW " h" lh)
 			lastGeom[winIdx] := geomKey
@@ -589,16 +717,21 @@ FlushTyping(isTimeout := false) {
 	global osd
 	SetTimer(FlushTypingTimeout, 0)
 
-	if (osd.State.TypingBuf != "") {
-		line := osd.State.TypingBuf
-		osd.State.TypingBuf := ""
-		osd.State.LastKey := ""
-		beforeCount := osd.State.Lines.Length
-		PushLine(line)
-		if (isTimeout && osd.State.Lines.Length > beforeCount)
-			osd.State.Lines[osd.State.Lines.Length].CreatedAt := A_TickCount - osd.DisplayTime
-		RenderOSD()
+	if (osd.State.TypingBuf = "")
+		return
+
+	line := osd.State.TypingBuf
+	osd.State.TypingBuf := ""
+	osd.State.LastKey := ""
+
+	if (isTimeout) {
+		FadeLastVisibleRow()
+		PromoteNextActiveLine()
+		return
 	}
+
+	PushLine(line)
+	RenderOSD()
 }
 
 FlushTypingTimeout() {
@@ -692,6 +825,32 @@ CancelAllFades() {
 	}
 }
 
+EnsureWindowCapacity(neededCount) {
+	global RowWins, FadingStates, FadeTimers
+
+	freeCount := 0
+	loop osd.MaxLines
+		if !FadingStates[A_Index]
+			freeCount++
+
+	shortfall := neededCount - freeCount
+	if (shortfall <= 0)
+		return
+
+	loop osd.MaxLines {
+		if (shortfall <= 0)
+			break
+		idx := A_Index
+		if (FadingStates[idx]) {
+			SetTimer(FadeTimers[idx], 0)
+			FadeTimers[idx] := 0
+			RowWins[idx].Hide()
+			FadingStates[idx] := false
+			shortfall--
+		}
+	}
+}
+
 CheckExpiredLines() {
 	global osd, RowWins, FadingStates
 
@@ -703,11 +862,10 @@ CheckExpiredLines() {
 	visibleCount := osd.State.Lines.Length
 
 	if (osd.State.TypingBuf = "") {
-		if (visibleCount > 0 && osd.State.Lines[visibleCount].IsExpired(osd.DisplayTime)) {
+		if (visibleCount > 0 && osd.State.Lines[visibleCount].IsActiveExpired(osd.DisplayTime)) {
 			FadeLastVisibleRow()
 			osd.State.Lines.RemoveAt(visibleCount)
-			if (osd.State.Lines.Length > 0)
-				osd.State.Lines[osd.State.Lines.Length].CreatedAt := A_TickCount
+			PromoteNextActiveLine()
 			return
 		}
 	}
@@ -720,6 +878,15 @@ CheckExpiredLines() {
 			osd.State.Lines.RemoveAt(idx)
 			return
 		}
+	}
+}
+
+PromoteNextActiveLine() {
+	global osd
+	if (osd.State.Lines.Length > 0) {
+		promoted := osd.State.Lines[osd.State.Lines.Length]
+		promoted.CreatedAt := A_TickCount
+		promoted.ActiveSince := A_TickCount
 	}
 }
 
