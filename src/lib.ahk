@@ -932,15 +932,3 @@ IsOSDVisible() {
 	}
 	return false
 }
-
-HideOSD() {
-	global RowWins, osd
-	CancelAllFades()
-	SetTimer(CheckExpiredLines, 0)
-	SetTimer(CommitPendingMod, 0)
-
-	loop osd.MaxLines
-		RowWins[A_Index].Hide()
-
-	ResetOSDState()
-}

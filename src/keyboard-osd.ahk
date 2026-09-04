@@ -7,7 +7,7 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and
 It is designed for presentations, tutorials, screen recordings,
  and live demonstrations where visible keystrokes make the workflow easier to follow.
 =========================
-26/08/2026
+03/09/2026
 Mesut Akcan
 =========================
 mesutakcan.blogspot.com
@@ -23,7 +23,7 @@ TODO:
 #Requires AutoHotkey v2
 #SingleInstance Force
 ;@Ahk2Exe-SetDescription Keyboard OSD
-;@Ahk2Exe-SetFileVersion 1.6
+;@Ahk2Exe-SetFileVersion 1.7
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
 ;@Ahk2Exe-AddResource app_icon_pause.ico, 207
@@ -33,9 +33,10 @@ A_ScriptName := "Keyboard OSD"
 #Include "lib.ahk"
 #Include "commonDialog.ahk"
 #Include "GroupBox.ahk"
+#Include "hotkeyplus.ahk"
 #Include "settings-gui.ahk"
 
-AppVer := "1.6"
+AppVer := "1.7"
 
 if !A_IsCompiled {
 	MAINICON := A_ScriptDir "\app_icon.ico"
@@ -217,7 +218,6 @@ global RowReady := []
 global FadingStates := []
 global FadeTimers := []
 global FadeAlphas := []
-global FadeTargets := []
 global activeOptions := "s" osd.FontSize
 	. " " (osd.FontBold ? "Bold" : "norm")
 	. (osd.FontItalic ? " Italic" : "")
@@ -233,7 +233,7 @@ global specialOptions := "s" osd.SpecialFontSize
 loop osd.MaxLines {
 	w := Gui("+AlwaysOnTop -Caption +ToolWindow")
 	w.BackColor := osd.BgColor
-    
+
 	pic := w.AddPicture("x0 y0 w1 h1 Hidden")
 	lbl := w.AddText("x0 y0 w" osd.Width " h" osd.LineHeight " c" osd.TextColor " Center", "")
 	lbl.SetFont(activeOptions, osd.FontName)
@@ -244,7 +244,6 @@ loop osd.MaxLines {
 	FadingStates.Push(false)
 	FadeTimers.Push(0)
 	FadeAlphas.Push(255)
-	FadeTargets.Push(255)
 }
 
 TogglePause(ItemName, *) {
@@ -353,7 +352,15 @@ KeyWatcher() {
 	Loop 255 {
 		vk := A_Index
 
-		if (vk >= 1 && vk <= 7)
+		if ((vk >= 1 && vk <= 7)
+			|| (vk >= 0x0A && vk <= 0x0B)
+			|| (vk >= 0x0E && vk <= 0x0F)
+			|| (vk >= 0x3A && vk <= 0x40)
+			|| (vk >= 0x88 && vk <= 0x8F)
+			|| (vk >= 0x97 && vk <= 0x9F)
+			|| (vk >= 0xD8 && vk <= 0xDA)
+			|| (vk >= 0xF6 && vk <= 0xFE)
+			|| vk = 0x5E || vk = 0xE0 || vk = 0xE8)
 			continue
 
 		if (vk = 0x10 || vk = 0x11 || vk = 0x12
@@ -446,7 +453,7 @@ CommitPendingMod() {
 	name := osd.State.PendingMod
 	osd.State.PendingMod := ""
 
-        
+
 	if (Trim(name) = "")
 		return
 
@@ -566,7 +573,8 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 	for item in modList
 		modOnlyLabel .= (modOnlyLabel = "" ? "" : " + ") item
 
-	modList.Push(foundKey)
+	displayKey := HotkeyPlus.BeautifyKeyName(foundKey)
+	modList.Push(displayKey)
 	label := ""
 	for item in modList
 		label .= (label = "" ? "" : " + ") item

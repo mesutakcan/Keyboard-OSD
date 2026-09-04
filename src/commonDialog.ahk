@@ -20,7 +20,7 @@ class FontDialog {
 		static CF_SIZE_32 := 64 ; CHOOSEFONTW: 28 bytes header + 32 bytes LOGFONTW + 4 bytes COLORREF
 		static CF_SIZE_64 := 104 ; CHOOSEFONTW: 40 bytes header + 32 bytes LOGFONTW + 4 bytes COLORREF
 		; Note: CHOOSEFONTW struct size is 64 bytes on 32-bit and 104 bytes on 64-bit. The LOGFONTW struct is always 92 bytes.
-		CF_SIZE := A_PtrSize = 8 ? CF_SIZE_64 : CF_SIZE_32  
+		CF_SIZE := A_PtrSize = 8 ? CF_SIZE_64 : CF_SIZE_32
 
 		LF := Buffer(LOGFONT_SIZE, 0) ; LOGFONTW struct
 		CF := Buffer(CF_SIZE, 0) ; CHOOSEFONTW struct
@@ -92,7 +92,7 @@ class ColorDialog {
 	; custColors: [in/out] Array of up to 16 custom RGB colors (persisted by caller)
 	; fullOpen: true = show full panel with custom color area
 	; Returns selected RGB color (0xRRGGBB), or -1 if cancelled.
-	
+
 	static Choose(initColor := 0, hwndOwner := 0, &custColors := "", fullOpen := true) {
 		static p := A_PtrSize
 		flags := fullOpen ? 0x3 : 0x1 ; CC_RGBINIT | CC_FULLOPEN or CC_RGBINIT only

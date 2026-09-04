@@ -60,6 +60,8 @@ ShowSettingsGui() {
 	global HotkeyToggleStr, HotkeyHideStr
 	HideOSDInstant()
 	SetTimer(KeyWatcher, 0)
+	try Hotkey(HotkeyToggleStr, "Off")
+	try Hotkey(HotkeyHideStr, "Off")
 
 	ExcludedEntries := LoadExcludedKeyEntries()
 
@@ -85,7 +87,7 @@ ShowSettingsGui() {
 	VX := PX + 135
 	cy0 := 32
 
-	nav := SettingsGui.Add("TreeView", "x" treeX " y" treeY " w" treeW " h" treeH " -0x0007")
+	nav := SettingsGui.Add("TreeView", "x" treeX " y" treeY " w" treeW " h" treeH)
 
 	bgColor := SettingsGui.BackColor
 	if (bgColor != "") {
@@ -124,12 +126,16 @@ ShowSettingsGui() {
 
 	; --- Hotkeys ---
 	pageHotkeys.Add(SettingsGui.Add("Text", "x" PX " y" cy0 " w130", "Pause OSD:"))
-	hkPause := SettingsGui.Add("Hotkey", "x" VX " yp-3 w120", HotkeyToggleStr)
-	pageHotkeys.Add(hkPause)
+	hkPause := SettingsGui.AddHotkeyPlus("x" VX " yp-3 w150 NoMouse", HotkeyToggleStr)
+	pageHotkeys.Add(hkPause.EditCtrl)
+	if hkPause.ClearBtn
+		pageHotkeys.Add(hkPause.ClearBtn)
 
 	pageHotkeys.Add(SettingsGui.Add("Text", "x" PX " y+12 w130", "Hide OSD:"))
-	hkHide := SettingsGui.Add("Hotkey", "x" VX " yp-3 w120", HotkeyHideStr)
-	pageHotkeys.Add(hkHide)
+	hkHide := SettingsGui.AddHotkeyPlus("x" VX " yp-3 w150 NoMouse", HotkeyHideStr)
+	pageHotkeys.Add(hkHide.EditCtrl)
+	if hkHide.ClearBtn
+		pageHotkeys.Add(hkHide.ClearBtn)
 
 	; --- Appearance ---
 	fontNameEdit := AddFontRow(pageAppearance, appearanceFont, cy0, (*) => _UpdateFontPreview(), "TextColor")
@@ -273,9 +279,11 @@ ShowSettingsGui() {
 	chkCustomList := SettingsGui.Add("Checkbox", "x" PX " y+10 vFilterCustomList"
 		(Number(osd.FilterCustomList) ? " Checked" : ""), "Custom exclusions:")
 	pageFilters.Add(chkCustomList)
-	hkCombo := SettingsGui.Add("Hotkey", "x" PX " y+6 w150")
-	pageFilters.Add(hkCombo)
-	btnAddExcl := SettingsGui.Add("Button", "x+8 yp w80", "Add")
+	hkCombo := SettingsGui.AddHotkeyPlus("x" PX " y+6 w180 NoMouse")
+	pageFilters.Add(hkCombo.EditCtrl)
+	if hkCombo.ClearBtn
+		pageFilters.Add(hkCombo.ClearBtn)
+	btnAddExcl := SettingsGui.Add("Button", "x+8 yp w70", "Add")
 	pageFilters.Add(btnAddExcl)
 	btnAddExcl.OnEvent("Click", _AddExcludedKey)
 
@@ -291,9 +299,16 @@ ShowSettingsGui() {
 	yBtns := panelY + panelH + 10
 	btnSave := SettingsGui.Add("Button", "Default x" PX " y" yBtns " w80", "Save")
 	btnSave.OnEvent("Click", SaveSettings)
+	_CloseSettingsGui(*) {
+		try Hotkey(HotkeyToggleStr, "On")
+		try Hotkey(HotkeyHideStr, "On")
+		SetTimer(KeyWatcher, 16)
+		SettingsGui.Destroy()
+	}
+
 	btnCancel := SettingsGui.Add("Button", "x+20 yp w80", "Cancel")
-	btnCancel.OnEvent("Click", (*) => (SetTimer(KeyWatcher, 16), SettingsGui.Destroy()))
-	SettingsGui.OnEvent("Close", (*) => (SetTimer(KeyWatcher, 16), SettingsGui.Destroy()))
+	btnCancel.OnEvent("Click", _CloseSettingsGui)
+	SettingsGui.OnEvent("Close", _CloseSettingsGui)
 
 	_UpdateFontPreview()
 	_UpdateHistPreview()
@@ -476,7 +491,7 @@ ShowSettingsGui() {
 		RenderPreviewBadge(fontPreviewPic, pw, ph, bgHex, alphaVal, , , radius)
 		fontPreviewPic.Redraw()
 
-		nudge := SettingsGui["TextYNudge"].Value
+		nudge := _SafeNudge(SettingsGui["TextYNudge"].Value)
 		opts := "s" appearanceFont.size
 			. " " (appearanceFont.bold ? "Bold" : "norm")
 			. (appearanceFont.italic ? " Italic" : "")
@@ -507,7 +522,7 @@ ShowSettingsGui() {
 		RenderPreviewBadge(histPreviewPic, pw, ph, bgHex, alphaVal, , , radius)
 		histPreviewPic.Redraw()
 
-		nudge := SettingsGui["HistTextYNudge"].Value
+		nudge := _SafeNudge(SettingsGui["HistTextYNudge"].Value)
 		opts := "s" histFont.size
 			. " " (histFont.bold ? "Bold" : "norm")
 			. (histFont.italic ? " Italic" : "")
@@ -540,7 +555,7 @@ ShowSettingsGui() {
 			SettingsGui["SpecialBorderColor"].Value, borderW, SPECIAL_OUTER_RADIUS)
 		specialPreviewPic.Redraw()
 
-		nudge := Number(SettingsGui["SpecialTextYNudge"].Value)
+		nudge := _SafeNudge(SettingsGui["SpecialTextYNudge"].Value)
 		opts := "s" specialFont.size
 			. " " (specialFont.bold ? "Bold" : "norm")
 			. " c" BlendHexColor(SettingsGui["SpecialTextColor"].Value, "FFFFFF", alphaVal)
@@ -632,7 +647,7 @@ ShowSettingsGui() {
 		display := FormatComboDisplay(raw)
 		ExcludedEntries.Push({ raw: raw, display: display })
 		lstExcluded.Add([display])
-		hkCombo.Value := ""
+		hkCombo.Clear()
 	}
 
 	_RemoveExcludedKey(*) {
@@ -677,38 +692,19 @@ SaveExcludedKeyEntries(entries) {
 }
 
 FormatComboDisplay(raw) {
-	entry := raw
-	parts := []
-
-	if (entry = "AltGr") {
+	if (raw = "")
+		return ""
+	if (raw = "AltGr")
 		return "AltGr"
-	} else if (SubStr(entry, 1, 6) = "AltGr+") {
-		parts.Push("AltGr")
-		entry := SubStr(entry, 7)
-	} else {
-		loop {
-			if (entry = "")
-				break
-			ch := SubStr(entry, 1, 1)
-			if (ch = "^")
-				parts.Push("Ctrl")
-			else if (ch = "+")
-				parts.Push("Shift")
-			else if (ch = "!")
-				parts.Push("Alt")
-			else if (ch = "#")
-				parts.Push("Win")
-			else
-				break
-			entry := SubStr(entry, 2)
-		}
-	}
+	if (SubStr(raw, 1, 6) = "AltGr+")
+		return "AltGr + " . HotkeyPlus.BeautifyKeyName(SubStr(raw, 7))
+	return HotkeyPlus.FormatKeyToText(raw)
+}
 
-	if (entry != "")
-		parts.Push(entry)
-
-	display := ""
-	for p in parts
-		display .= (display = "" ? "" : "+") p
-	return display
+_SafeNudge(val) {
+	val := Trim(val)
+	if (val = "" || val = "-" || val = "+")
+		return 0
+	try return Integer(val)
+	return 0
 }
