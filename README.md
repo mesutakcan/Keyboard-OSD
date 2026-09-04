@@ -1,20 +1,14 @@
 # Keyboard OSD
 
-[![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
-[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
-[![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.6-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
+[![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/) [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows) [![License](https://img.shields.io/badge/License-GPL-blue.svg)](https://github.com/mesutakcan/Keyboard-OSD/blob/main/LICENSE) [![Version](https://img.shields.io/badge/Version-1.7-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
 
-![GitHub stars](https://img.shields.io/github/stars/mesutakcan/Keyboard-OSD?style=social)
-![GitHub forks](https://img.shields.io/github/forks/mesutakcan/Keyboard-OSD?style=social)
-![GitHub issues](https://img.shields.io/github/issues/mesutakcan/Keyboard-OSD)
-[![Downloads](https://img.shields.io/github/downloads/mesutakcan/Keyboard-OSD/total)](https://github.com/mesutakcan/Keyboard-OSD/releases)
+[![GitHub stars](https://img.shields.io/github/stars/mesutakcan/Keyboard-OSD?style=social)](https://github.com/mesutakcan/Keyboard-OSD) [![GitHub forks](https://img.shields.io/github/forks/mesutakcan/Keyboard-OSD?style=social)](https://github.com/mesutakcan/Keyboard-OSD) [![GitHub issues](https://img.shields.io/github/issues/mesutakcan/Keyboard-OSD)](https://github.com/mesutakcan/Keyboard-OSD) [![Downloads](https://img.shields.io/github/downloads/mesutakcan/Keyboard-OSD/total)](https://github.com/mesutakcan/Keyboard-OSD/releases)
 
 Keyboard OSD is a lightweight Windows utility that displays keyboard input and shortcut combinations on screen in real time. It is designed for presentations, tutorials, screen recordings, and live demonstrations where visible keystrokes make the workflow easier to follow.
 
-![Keyboard OSD demo](docs/ss_keyboard_osd.gif)
+[![Keyboard OSD demo](docs/ss_keyboard_osd.gif)](docs/ss_keyboard_osd.gif)
 
-Keyboard OSD Demo video: [https://youtu.be/UvLldgMmC-Q](https://youtu.be/UvLldgMmC-Q)
+Keyboard OSD demo video: https://youtu.be/UvLldgMmC-Q
 
 ## Features
 
@@ -23,15 +17,16 @@ Keyboard OSD Demo video: [https://youtu.be/UvLldgMmC-Q](https://youtu.be/UvLldgM
 - Repeated key presses are grouped together with a counter instead of cluttering the screen.
 - Keeps a short history of recent keys, with each line fading out on its own timer.
 - Optional word wrap for longer typed text, and natural Backspace handling while typing.
-- Works with common modifiers: <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, <kbd>Alt</kbd>, <kbd>Win</kbd>, and <kbd>AltGr</kbd>.
+- Works with common modifiers: <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, <kbd>Alt</kbd>, <kbd>Win</kbd>, and AltGr.
 - Click-through overlay — it never gets in the way of the window you're working in.
 - Automatically follows the active window to the correct monitor.
 - Fully customizable from a settings window: colors, fonts, size, transparency, position, margins, padding, and timing — all with a live preview.
 - Smooth fade-out animations and optional rounded corners.
 - History lines can have their own font size, colors, and transparency, separate from the active line.
-- Pause and resume anytime with **<kbd>Ctrl+Shift+F8</kbd>** or from the tray menu.
+- Pause and resume anytime with <kbd>Ctrl+Shift+F8</kbd> or from the tray menu.
 - Filter unwanted key categories or individual key combinations from the OSD.
-- Configure the pause and hide-OSD hotkeys from the settings window.
+- Configure the pause and hide-OSD hotkeys from the settings window, including quick capture and a clear button.
+- Can be hidden by another script or application, without simulating a keypress — handy for screen recording setups.
 - Compiled version is a single portable `.exe` — no separate icon files or installation needed.
 
 ## Requirements
@@ -42,16 +37,17 @@ Keyboard OSD Demo video: [https://youtu.be/UvLldgMmC-Q](https://youtu.be/UvLldgM
 
 ## Files
 
-| File | Description |
-|---|---|
-| `keyboard-osd.ahk` | Main script — handles the tray menu and displays your keystrokes on screen |
-| `lib.ahk` | Supporting code for rendering and window behavior |
-| `settings-gui.ahk` | The settings window, with live preview |
-| `commonDialog.ahk` | Windows font and color picker windows |
-| `GroupBox.ahk` | Group box control used by the settings window |
-| `settings.ini` | Your saved settings (created automatically the first time you save) |
-| `app_icon.ico` | Tray icon shown while the OSD is active (source version only) |
-| `app_icon_pause.ico` | Tray icon shown while the OSD is paused (source version only) |
+| File                 | Description                                                                |
+| -------------------- | -------------------------------------------------------------------------- |
+| `keyboard-osd.ahk`   | Main script — handles the tray menu and displays your keystrokes on screen |
+| `lib.ahk`            | Supporting code for rendering and window behavior                          |
+| `settings-gui.ahk`   | The settings window, with live preview                                     |
+| `commonDialog.ahk`   | Windows font and color picker windows                                      |
+| `GroupBox.ahk`       | Group box control used by the settings window                              |
+| `hotkeyplus.ahk`     | Hotkey capture control used on the Hotkeys and Filters settings pages      |
+| `settings.ini`       | Your saved settings (created automatically the first time you save)        |
+| `app_icon.ico`       | Tray icon shown while the OSD is active (source version only)              |
+| `app_icon_pause.ico` | Tray icon shown while the OSD is paused (source version only)              |
 
 ## Usage
 
@@ -87,15 +83,17 @@ You can also toggle pause or hide the OSD with the configurable hotkeys in the *
 
 All options can be changed from the settings window, organized into categories in the sidebar. Changes are saved to `settings.ini` and the script reloads automatically to apply them.
 
-![Settings window](docs/ss_settings.gif)
+[![Settings window](docs/ss_settings.gif)](docs/ss_settings.gif)
 
 ### Appearance
+
 - Text and background colors (Windows color picker)
 - Background transparency (alpha)
 - Font family, size, bold, italic, underline, strikeout (Windows font picker)
 - Rounded window corners (on/off)
 
 ### Layout
+
 - Auto width or fixed maximum width
 - Word wrap for typed text
 - Maximum visible lines
@@ -105,11 +103,13 @@ All options can be changed from the settings window, organized into categories i
 - Padding X, Padding Y Top, Padding Y Bottom inside each row
 
 ### History
+
 - History line font size
 - History text and background colors
 - History background transparency
 
 ### Special
+
 Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</kbd>, <kbd>Shift</kbd>, <kbd>Escape</kbd>, <kbd>Tab</kbd>):
 
 - Border color, fill color, text color
@@ -120,20 +120,35 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 - Keep the badge style when the line moves into history
 
 ### Timing
+
 - Display duration (ms) — how long the active line stays on screen
 - Dismiss delay (ms) — how long each history line stays before fading out
 - Modifier delay (ms) — how long to wait before showing a lone modifier key press
 
 ### Filters
+
 - Function keys (F1-F24), Numpad, English letters, digits, arrow keys, and navigation keys
 - Other letters by entering the characters to exclude
 - Modifiers alone or as part of a combination
 - Custom key combinations, managed with an add/remove list
 
 ### Hotkeys
+
 - Configure the hotkey for pausing or resuming the OSD
 - Configure the hotkey for hiding all visible OSD rows
+- Click into the box and press a key combination to capture it directly — only keyboard keys are accepted, mouse buttons are not
 
+## Hiding the OSD from another application
+
+If you record your screen with a separate tool, you may want that tool to hide the OSD on its own — for example right before it starts or stops recording — without sending a fake keypress to your system.
+
+Keyboard OSD listens for a Windows message for this. Any other script or application can send message `0x5555` to the Keyboard OSD window to hide all visible rows instantly:
+
+```ahk
+PostMessage(0x5555, 0, 0, , "Keyboard OSD")
+```
+
+This is the same approach used by screen recording helper scripts — it hides the OSD directly at the window level, so it works even while the OSD window is click-through and out of focus.
 
 ## Notes
 
@@ -147,6 +162,13 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 
 ## History
 
+### Version 1.7 (2026-09-04)
+
+- Hotkeys and custom key combinations are now captured with a dedicated control instead of the built-in Windows hotkey box, with a clearer display and a button to clear the current value.
+- Only keyboard keys can be assigned as hotkeys or exclusion combinations — mouse buttons are no longer accepted, to keep behavior focused on keyboard input.
+
+---
+
 ### Version 1.6 (2026-08-26)
 
 - Added a **Filters** settings page for excluding key categories, individual characters, modifiers, and custom key combinations.
@@ -156,17 +178,19 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 - Settings window navigation redesigned: a category list on the left replaces the old tabs.
 
 **Fixes:**
+
 - Fixed occasional flickering while typing.
 
 ---
 
 ### Version 1.5 (2026-07-15)
 
-- The Windows (<kbd>Win</kbd>)  key can now be shown on its own as a badge, just like <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, and <kbd>Alt</kbd>.
-- Improved <kbd>AltGr</kbd> and <kbd>Shift</kbd> handling: when a key combination produces a character, that character now appears in the typed text as expected. When it doesn't produce a character, the badge shows the key combination itself (e.g. <kbd>AltGr + K</kbd>).
+- The Windows (<kbd>Win</kbd>) key can now be shown on its own as a badge, just like <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, and <kbd>Alt</kbd>.
+- Improved AltGr and <kbd>Shift</kbd> handling: when a key combination produces a character, that character now appears in the typed text as expected. When it doesn't produce a character, the badge shows the key combination itself (e.g. AltGr + K).
 - Holding down multiple modifier keys in sequence now updates the badge smoothly to show the full combination, instead of showing a separate badge for each stage.
 
 **Fixes:**
+
 - A lone modifier badge (e.g. just <kbd>Shift</kbd>) no longer lingers on screen after you start typing.
 
 ---
@@ -190,6 +214,7 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 - Added fine-grained padding controls for each row (left/right, top, bottom).
 
 **Fixes:**
+
 - Fade animations no longer cause typing to lag or stutter.
 
 ---
@@ -206,6 +231,7 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 - Improved portability — the `.exe` file now works standalone without requiring external icon files.
 
 **Fixes:**
+
 - Fixed tray icon not displaying correctly in compiled executable.
 - Fixed pause icon switching when script is paused.
 
