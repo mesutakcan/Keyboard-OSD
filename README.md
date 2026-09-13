@@ -286,6 +286,14 @@ This project is licensed under the GPL 3.0 License. For more information, see th
 
 Contributions are welcome! If you'd like to add features, fix bugs, or improve the code, feel free to open a pull request.
 
+## Credits
+
+Keyboard OSD builds on a few other open-source projects:
+
+- [GroupBox](https://github.com/mesutakcan/GroupBox) by Mesut Akcan - the container control used to group settings on each page.
+- [HotkeyPlus](https://github.com/mesutakcan/hotkeyplus-ahk) by Mesut Akcan - the hotkey capture control used on the Hotkeys and Filters pages.
+- [AHKv2-Gdip](https://github.com/buliasz/AHKv2-Gdip) by buliasz - `gdip.ahk` is a trimmed-down copy of this library, keeping only the drawing functions Keyboard OSD needs.
+
 ## Contact
 
 **Author**: Mesut Akcan\
