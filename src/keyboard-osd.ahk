@@ -7,7 +7,7 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and
 It is designed for presentations, tutorials, screen recordings,
  and live demonstrations where visible keystrokes make the workflow easier to follow.
 =========================
-03/09/2026
+13/09/2026
 Mesut Akcan
 =========================
 mesutakcan.blogspot.com
@@ -23,20 +23,22 @@ TODO:
 #Requires AutoHotkey v2
 #SingleInstance Force
 ;@Ahk2Exe-SetDescription Keyboard OSD
-;@Ahk2Exe-SetFileVersion 1.7
+;@Ahk2Exe-SetFileVersion 1.8
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
 ;@Ahk2Exe-AddResource app_icon_pause.ico, 207
 
 A_ScriptName := "Keyboard OSD"
 
-#Include "lib.ahk"
+#Include "gdip.ahk"
+#Include "render.ahk"
+#Include "keyfilter.ahk"
 #Include "commonDialog.ahk"
 #Include "GroupBox.ahk"
 #Include "hotkeyplus.ahk"
 #Include "settings-gui.ahk"
 
-AppVer := "1.7"
+AppVer := "1.8"
 
 if !A_IsCompiled {
 	MAINICON := A_ScriptDir "\app_icon.ico"
@@ -54,10 +56,12 @@ OnExternalHide(wParam, lParam, msg, hwnd) {
 IniFile := A_ScriptDir "\settings.ini"
 
 global ExcludedKeyList := LoadExcludedKeys()
-global HotkeyToggleStr := ReadIni("TogglePause", "!F12", , "Hotkeys")
-global HotkeyHideStr := ReadIni("HideOSD", "!Delete", , "Hotkeys")
-global PauseMenuItemName := "Pause OSD`t" FormatComboDisplay(HotkeyToggleStr)
-global HideMenuItemName := "Hide OSD`t" FormatComboDisplay(HotkeyHideStr)
+global HotkeyToggleStr := ReadIni("TogglePause", "^+F12", , "Hotkeys")
+global HotkeyHideStr := ReadIni("HideOSD", "^+F9", , "Hotkeys")
+global PauseMenuItemName := "Pause OSD	" FormatComboDisplay(HotkeyToggleStr)
+global HideMenuItemName := "Hide OSD	" FormatComboDisplay(HotkeyHideStr)
+
+global PendingReload := false
 
 global SystemExcludedKeyList := []
 for str in [HotkeyToggleStr, HotkeyHideStr] {
@@ -70,26 +74,30 @@ for str in [HotkeyToggleStr, HotkeyHideStr] {
 SetupTrayMenu()
 
 OnExit(ClearMeasureTextWidthCache)
+OnExit(ClearGdipFontCache)
 OnExit(ShutdownGdiplus)
 OnExit(ClearBadgeCache)
 InitGdiplus()
 
 global TextMeasureFontCache := Map()
+global GdipFontCache := Map()
 global CachedMaxWidth := 0
 global TextMeasureFontHDC := 0
 
 global SPECIAL_OUTER_RADIUS := 8
-global SpecialBadgeCache := Map()
-
+global RowBitmaps := Map()
 class OSDState {
 	LastKey := ""
 	DownVKs := Map()
 	DownMods := Map()
 	Lines := []
 	PendingMod := ""
+	PendingModSerial := 0
+	PendingModTimer := 0
 	PendingComposeTap := ""
-	PendingDismiss := 0
 	TypingBuf := ""
+	TypingSerial := 0
+	TypingTimer := 0
 }
 
 class OSDSettings {
@@ -103,8 +111,6 @@ class OSDSettings {
 	FontItalic := ReadIni("FontItalic", 0, true, "Appearance")
 	TextPadX := ReadIni("TextPadX", 8, true, "Appearance")
 	TextPadY := ReadIni("TextPadY", 5, true, "Appearance")
-	TextYNudge := ReadIni("TextYNudge", 0, true, "Appearance")
-	CornerRadius := 1
 
 	Width := ReadIni("Width", 350, true, "Layout")
 	AutoWidth := ReadIni("AutoWidth", 1, true, "Layout")
@@ -115,13 +121,7 @@ class OSDSettings {
 	MarginY := ReadIni("MarginY", 30, true, "Layout")
 	LineGap := ReadIni("LineGap", 2, true, "Layout")
 
-	HistFontName := ReadIni("HistFontName", "Segoe UI", , "History")
 	HistFontSize := ReadIni("HistFontSize", 15, true, "History")
-	HistFontBold := ReadIni("HistFontBold", 1, true, "History")
-	HistFontItalic := ReadIni("HistFontItalic", 0, true, "History")
-	HistTextPadX := ReadIni("HistTextPadX", 8, true, "History")
-	HistTextPadY := ReadIni("HistTextPadY", 5, true, "History")
-	HistTextYNudge := ReadIni("HistTextYNudge", 0, true, "History")
 	HistAlpha := ReadIni("HistAlpha", 150, true, "History")
 	HistTextColor := ReadIni("HistTextColor", "FFFFFF", , "History")
 	HistBgColor := ReadIni("HistBgColor", "AAAAAA", , "History")
@@ -132,13 +132,14 @@ class OSDSettings {
 	SpecialFontItalic := ReadIni("SpecialFontItalic", 0, true, "Special")
 	SpecialBgColor := ReadIni("SpecialBgColor", "FFFFFF", , "Special")
 	SpecialTextColor := ReadIni("SpecialTextColor", "000000", , "Special")
-	SpecialBorderColor := ReadIni("SpecialBorderColor", "000000", , "Special")
+	SpecialBorderColor := ReadIni("SpecialBorderColor", "383838", , "Special")
 	SpecialAlpha := ReadIni("SpecialAlpha", 175, true, "Special")
 	SpecialBorderWidth := ReadIni("SpecialBorderWidth", 3, true, "Special")
 	SpecialTextPadX := ReadIni("SpecialTextPadX", 1, true, "Special")
 	SpecialTextPadY := ReadIni("SpecialTextPadY", 1, true, "Special")
-	SpecialTextYNudge := ReadIni("SpecialTextYNudge", -5, true, "Special")
-	SpecialKeepStyleInHistory := ReadIni("SpecialKeepStyleInHistory", 0, true, "Special")
+	SpecialTextYNudge := ReadIni("SpecialTextYNudge", 0, true, "Special")
+	CombineSpecialKeys := ReadIni("CombineSpecialKeys", 1, true, "Special")
+	SpecialGap := ReadIni("SpecialGap", 3, true, "Special")
 
 	DisplayTime := ReadIni("DisplayTime", 4000, true, "Timing")
 	DismissDelay := ReadIni("DismissDelay", 3000, true, "Timing")
@@ -152,7 +153,7 @@ class OSDSettings {
 	FilterNavKeys := ReadIni("FilterNavKeys", 0, true, "Filters")
 	FilterModifiers := ReadIni("FilterModifiers", 0, true, "Filters")
 	FilterModifierMode := ReadIni("FilterModifierMode", "Alone", , "Filters")
-	FilterCustomList := ReadIni("FilterCustomList", 1, true, "Filters")
+	FilterCustomList := ReadIni("FilterCustomList", 0, true, "Filters")
 	FilterOtherLetters := ReadIni("FilterOtherLetters", 0, true, "Filters")
 	FilterOtherLettersChars := ReadIni("FilterOtherLettersChars", "", , "Filters")
 }
@@ -160,16 +161,13 @@ class OSDSettings {
 global osd := OSDSettings()
 
 class OSDLine {
-	BaseText := ""
-	Text := ""
+	Segments := []
 	CreatedAt := 0
 	ActiveSince := 0
-	Count := 1
 	IsSpecial := false
 
 	__New(text, isSpecial := false) {
-		this.BaseText := text
-		this.Text := text
+		this.Segments := [{ Text: text, Count: 1 }]
 		this.CreatedAt := A_TickCount
 		this.ActiveSince := A_TickCount
 		this.IsSpecial := isSpecial
@@ -191,55 +189,57 @@ class OSDLine {
 		return this.ActiveAge() >= timeout
 	}
 
-	Increment() {
-		this.Count++
-		this.Text := this.BaseText " ×" this.Count
+	Last() {
+		return this.Segments[this.Segments.Length]
+	}
+
+	Touch() {
 		this.CreatedAt := A_TickCount
 		this.ActiveSince := A_TickCount
 	}
 
+	Increment() {
+		seg := this.Last()
+		seg.Count++
+		seg.Text := RegExReplace(seg.Text, " ×\d+$", "") " ×" seg.Count
+		this.Touch()
+	}
+
 	ReplaceText(text) {
-		this.BaseText := text
-		this.Text := text
-		this.Count := 1
-		this.CreatedAt := A_TickCount
-		this.ActiveSince := A_TickCount
+		seg := this.Last()
+		seg.Text := text
+		seg.Count := 1
+		this.Touch()
+	}
+
+	AddSegment(text) {
+		this.Segments.Push({ Text: text, Count: 1 })
+		this.Touch()
+	}
+
+	DisplayText() {
+		if (this.Segments.Length = 1)
+			return this.Segments[1].Text
+		joined := ""
+		for seg in this.Segments
+			joined .= (joined = "" ? "" : " ") seg.Text
+		return joined
 	}
 }
 
 global CHAR_WIDTH_RATIO := 0.55
 osd.LineHeight := MeasureTextHeight(osd.FontName, osd.FontSize, osd.FontBold, osd.FontItalic) + osd.TextPadY * 2
-osd.HistLineHeight := MeasureTextHeight(osd.HistFontName, osd.HistFontSize, osd.HistFontBold, osd.HistFontItalic) + osd.HistTextPadY * 2
+osd.HistLineHeight := MeasureTextHeight(osd.FontName, osd.HistFontSize, osd.FontBold, osd.FontItalic) + Round(osd.TextPadY * HistTextScale()) * 2
 osd.MaxTyping := Max(10, Floor((osd.Width - osd.TextPadX * 2) / (osd.FontSize * CHAR_WIDTH_RATIO)))
 global RowWins := []
-global RowLabels := []
-global RowPics := []
 global RowReady := []
 global FadingStates := []
 global FadeTimers := []
 global FadeAlphas := []
-global activeOptions := "s" osd.FontSize
-	. " " (osd.FontBold ? "Bold" : "norm")
-	. (osd.FontItalic ? " Italic" : "")
-
-global histOptions := "s" osd.HistFontSize
-	. " " (osd.HistFontBold ? "Bold" : "norm")
-	. (osd.HistFontItalic ? " Italic" : "")
-
-global specialOptions := "s" osd.SpecialFontSize
-	. " " (osd.SpecialFontBold ? "Bold" : "norm")
-	. (osd.SpecialFontItalic ? " Italic" : "")
 
 loop osd.MaxLines {
-	w := Gui("+AlwaysOnTop -Caption +ToolWindow")
-	w.BackColor := osd.BgColor
-
-	pic := w.AddPicture("x0 y0 w1 h1 Hidden")
-	lbl := w.AddText("x0 y0 w" osd.Width " h" osd.LineHeight " c" osd.TextColor " Center", "")
-	lbl.SetFont(activeOptions, osd.FontName)
+	w := Gui("+AlwaysOnTop -Caption +ToolWindow +E0x80000")
 	RowWins.Push(w)
-	RowLabels.Push(lbl)
-	RowPics.Push(pic)
 	RowReady.Push(false)
 	FadingStates.Push(false)
 	FadeTimers.Push(0)
@@ -259,7 +259,7 @@ TogglePause(ItemName, *) {
 
 		Loop 255 {
 			vk := A_Index
-			if (vk >= 1 && vk <= 7)
+			if IsReservedVK(vk)
 				continue
 			if (DllCall("GetAsyncKeyState", "UShort", vk, "Short") & 0x8000) {
 				if (vk = 0x10 || vk = 0xA0 || vk = 0xA1)
@@ -294,6 +294,27 @@ ShowAbout(*) {
 	)
 }
 
+; VK codes Windows never actually sends for a real key press (unassigned,
+; reserved, or OEM-internal ranges). Shared by KeyWatcher and TogglePause so
+; both scan the same set of real, physical keys.
+IsReservedVK(vk) {
+	return (vk >= 1 && vk <= 7)
+		|| (vk >= 0x0A && vk <= 0x0B)
+		|| (vk >= 0x0E && vk <= 0x0F)
+		|| (vk >= 0x3A && vk <= 0x40)
+		|| (vk >= 0x88 && vk <= 0x8F)
+		|| (vk >= 0x97 && vk <= 0x9F)
+		|| (vk >= 0xD8 && vk <= 0xDA)
+		|| (vk >= 0xF6 && vk <= 0xFE)
+		|| vk = 0x5E || vk = 0xE0 || vk = 0xE8
+}
+
+; Known limitation (accepted, not a bug to chase): this polls key state every 16ms
+; rather than using a WH_KEYBOARD_LL hook. An extremely fast press-release-press of
+; the SAME key can land entirely between two polls and be missed, since only the
+; "is it down right now" state is sampled, not each individual down/up event. A real
+; hook would catch every event but is a bigger architectural change - deliberately
+; not pursued here.
 KeyWatcher() {
 	global osd
 
@@ -352,15 +373,7 @@ KeyWatcher() {
 	Loop 255 {
 		vk := A_Index
 
-		if ((vk >= 1 && vk <= 7)
-			|| (vk >= 0x0A && vk <= 0x0B)
-			|| (vk >= 0x0E && vk <= 0x0F)
-			|| (vk >= 0x3A && vk <= 0x40)
-			|| (vk >= 0x88 && vk <= 0x8F)
-			|| (vk >= 0x97 && vk <= 0x9F)
-			|| (vk >= 0xD8 && vk <= 0xDA)
-			|| (vk >= 0xF6 && vk <= 0xFE)
-			|| vk = 0x5E || vk = 0xE0 || vk = 0xE8)
+		if IsReservedVK(vk)
 			continue
 
 		if (vk = 0x10 || vk = 0x11 || vk = 0x12
@@ -385,8 +398,9 @@ KeyWatcher() {
 	osd.State.DownVKs := stillDown
 
 	if (newKeys.Length > 0) {
-		SetTimer(CommitPendingMod, 0)
+		CancelPendingModTimer()
 		osd.State.PendingMod := ""
+		osd.State.PendingModSerial++
 		osd.State.PendingComposeTap := ""
 	}
 
@@ -400,13 +414,17 @@ KeyWatcher() {
 		}
 
 		if (isComposeOnly && osd.State.TypingBuf != "") {
-			SetTimer(CommitPendingMod, 0)
+			CancelPendingModTimer()
 			osd.State.PendingMod := ""
+			osd.State.PendingModSerial++
 			osd.State.PendingComposeTap := combinedMod
 		} else {
-			SetTimer(CommitPendingMod, 0)
+			CancelPendingModTimer()
+			osd.State.PendingModSerial++
+			serial := osd.State.PendingModSerial
 			osd.State.PendingMod := combinedMod
-			SetTimer(CommitPendingMod, -osd.ModifierDelay)
+			osd.State.PendingModTimer := CommitPendingMod.Bind(serial)
+			SetTimer(osd.State.PendingModTimer, -osd.ModifierDelay)
 		}
 	}
 
@@ -417,12 +435,7 @@ KeyWatcher() {
 		if !IsModifierTapExcluded() {
 			FlushTyping()
 
-			if (tapLabel = osd.State.LastKey && osd.State.Lines.Length > 0) {
-				osd.State.Lines[osd.State.Lines.Length].Increment()
-			} else {
-				osd.State.LastKey := tapLabel
-				PushLine(tapLabel, true)
-			}
+			CommitSpecialKey(tapLabel)
 			RenderOSD()
 		}
 	}
@@ -445,13 +458,25 @@ BuildModLabel(hasCtrl, hasShift, hasAlt, hasWin, isAltGr) {
 	return label
 }
 
-CommitPendingMod() {
+CancelPendingModTimer() {
+	global osd
+	if (osd.State.PendingModTimer) {
+		SetTimer(osd.State.PendingModTimer, 0)
+		osd.State.PendingModTimer := 0
+	}
+}
+
+CommitPendingMod(serial := 0) {
 	global osd
 	if (osd.State.PendingMod = "")
+		return
+	if (serial != 0 && serial != osd.State.PendingModSerial)
 		return
 
 	name := osd.State.PendingMod
 	osd.State.PendingMod := ""
+	osd.State.PendingModTimer := 0
+	osd.State.PendingModSerial++
 
 
 	if (Trim(name) = "")
@@ -460,39 +485,93 @@ CommitPendingMod() {
 	if IsModifierTapExcluded()
 		return
 
-	if !IsOSDVisible()
+	if (!IsOSDVisible() && osd.State.Lines.Length = 0 && osd.State.TypingBuf = "")
 		ResetOSDState()
 
 	FlushTyping()
-
-	if (name = osd.State.LastKey && osd.State.Lines.Length > 0) {
-		osd.State.Lines[osd.State.Lines.Length].Increment()
-	} else if (osd.State.Lines.Length > 0 && osd.State.Lines[osd.State.Lines.Length].IsSpecial
-		&& osd.State.LastKey != "" && TokensSubsetOf(osd.State.LastKey, name)) {
-		osd.State.Lines[osd.State.Lines.Length].ReplaceText(name)
-		osd.State.LastKey := name
-	} else {
-		osd.State.LastKey := name
-		PushLine(name, true)
-	}
+	CommitSpecialKey(name, name)
 	RenderOSD()
+}
+
+CommitSpecialKey(label, subsetCheckLabel := "") {
+	global osd
+	lines := osd.State.Lines
+
+	if (label = osd.State.LastKey && lines.Length > 0) {
+		lines[lines.Length].Increment()
+		EnforceRowWidth()
+		return
+	}
+
+	if (subsetCheckLabel != "" && lines.Length > 0 && lines[lines.Length].IsSpecial
+		&& osd.State.LastKey != "" && TokensSubsetOf(osd.State.LastKey, subsetCheckLabel)) {
+		lines[lines.Length].ReplaceText(label)
+		osd.State.LastKey := label
+		EnforceRowWidth()
+		return
+	}
+
+	osd.State.LastKey := label
+	AddSpecialLine(label)
+}
+
+EnforceRowWidth() {
+	global osd
+	lines := osd.State.Lines
+	if (lines.Length = 0)
+		return
+
+	active := lines[lines.Length]
+	if (!active.IsSpecial || active.Segments.Length <= 1)
+		return
+	if (SpecialRowWidth(active.Segments) <= CurrentMaxWidth())
+		return
+
+	overflow := active.Segments.Pop()
+	newLine := OSDLine(overflow.Text, true)
+	newLine.Segments[1].Count := overflow.Count
+	lines.Push(newLine)
+}
+
+CurrentMaxWidth() {
+	global osd, CachedMaxWidth
+	return CachedMaxWidth > 0 ? CachedMaxWidth : Min(osd.Width, Round(GetActiveMonitorBounds()["w"] * 0.75))
+}
+
+AddSpecialLine(label) {
+	global osd
+	lines := osd.State.Lines
+
+	if (osd.CombineSpecialKeys && lines.Length > 0 && lines[lines.Length].IsSpecial) {
+		active := lines[lines.Length]
+		if (SpecialRowWidth(active.Segments) + osd.SpecialGap + MeasureSpecialBadgeWidth(label) <= CurrentMaxWidth()) {
+			active.AddSegment(label)
+			return
+		}
+	}
+
+	PushLine(label, true)
 }
 
 HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 	global osd
+	PruneTrailingPlaceholder()
 
 	if IsKeyExcluded(hasCtrl, hasShift, hasAlt, hasWin, isAltGr, foundKey, foundVK) {
 		modLabel := BuildModLabel(hasCtrl, hasShift, hasAlt, hasWin, isAltGr)
 		if (modLabel != "" && osd.State.LastKey = modLabel && osd.State.Lines.Length > 0
 			&& osd.State.Lines[osd.State.Lines.Length].IsSpecial) {
-			osd.State.Lines.Pop()
+			activeLine := osd.State.Lines[osd.State.Lines.Length]
+			activeLine.Segments.Pop()
+			if (activeLine.Segments.Length = 0)
+				osd.State.Lines.Pop()
 			osd.State.LastKey := ""
 			RenderOSD()
 		}
 		return
 	}
 
-	if !IsOSDVisible()
+	if (!IsOSDVisible() && osd.State.Lines.Length = 0 && osd.State.TypingBuf = "")
 		ResetOSDState()
 
 	modList := []
@@ -511,7 +590,7 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 	if (foundVK = 0x08 && !hasMods && osd.State.TypingBuf != "") {
 		osd.State.TypingBuf := SubStr(osd.State.TypingBuf, 1, StrLen(osd.State.TypingBuf) - 1)
 		RenderOSD(osd.State.TypingBuf)
-		SetTimer(FlushTypingTimeout, -osd.DisplayTime)
+		ScheduleTypingTimeout()
 		osd.State.LastKey := ""
 		return
 	}
@@ -529,24 +608,16 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 	if isTyping {
 		if (osd.State.TypingBuf == "" && osd.State.Lines.Length > 0) {
 			lastLine := osd.State.Lines[osd.State.Lines.Length]
-			isPureMod := true
-			for tok in StrSplit(lastLine.BaseText, " + ") {
-				if !(tok = "Ctrl" || tok = "Shift" || tok = "Alt" || tok = "Win" || tok = "AltGr") {
-					isPureMod := false
-					break
-				}
-			}
-			if (lastLine.IsSpecial && isPureMod)
-				osd.State.Lines.RemoveAt(osd.State.Lines.Length)
-			else {
-				lastLine.CreatedAt := A_TickCount
-				lastLine.ActiveSince := A_TickCount
+			if (lastLine.IsSpecial && IsPureModifierLabel(lastLine.Last().Text)) {
+				lastLine.Segments.Pop()
+				if (lastLine.Segments.Length = 0)
+					osd.State.Lines.RemoveAt(osd.State.Lines.Length)
 			}
 		}
 
-		maxW := CachedMaxWidth > 0 ? CachedMaxWidth : Min(osd.Width, Round(GetActiveMonitorBounds()["w"] * 0.75))
+		maxW := CurrentMaxWidth()
 		candidate := osd.State.TypingBuf . typedChar
-		tw := MeasureTextWidth(candidate, osd.FontName, osd.FontSize, osd.FontBold, osd.FontItalic) + osd.TextPadX * 2
+		tw := MeasureTextWidthGdip(candidate, osd.FontName, osd.FontSize, osd.FontBold, osd.FontItalic) + osd.TextPadX * 2
 
 		if (tw > maxW || StrLen(candidate) > osd.MaxTyping) {
 			if osd.WordWrap {
@@ -559,8 +630,15 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 			osd.State.TypingBuf := candidate
 		}
 		RenderOSD(osd.State.TypingBuf)
-		SetTimer(FlushTypingTimeout, -osd.DisplayTime)
+		ScheduleTypingTimeout()
 		osd.State.LastKey := ""
+		return
+	}
+
+	if (foundKey = "Enter" && !hasMods && osd.State.TypingBuf != "") {
+		FlushTyping()
+		PushEmptyActivePlaceholder()
+		RenderOSD()
 		return
 	}
 
@@ -574,22 +652,14 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 		modOnlyLabel .= (modOnlyLabel = "" ? "" : " + ") item
 
 	displayKey := HotkeyPlus.BeautifyKeyName(foundKey)
+	if (!hasShift && RegExMatch(displayKey, "^[A-Z]$"))
+		displayKey := StrLower(displayKey)
 	modList.Push(displayKey)
 	label := ""
 	for item in modList
 		label .= (label = "" ? "" : " + ") item
 
-	if (label = osd.State.LastKey && osd.State.Lines.Length > 0) {
-		osd.State.Lines[osd.State.Lines.Length].Increment()
-	} else if (modOnlyLabel != "" && osd.State.Lines.Length > 0
-		&& osd.State.Lines[osd.State.Lines.Length].IsSpecial
-		&& osd.State.LastKey != "" && TokensSubsetOf(osd.State.LastKey, modOnlyLabel)) {
-		osd.State.Lines[osd.State.Lines.Length].ReplaceText(label)
-		osd.State.LastKey := label
-	} else {
-		osd.State.LastKey := label
-		PushLine(label, true)
-	}
+	CommitSpecialKey(label, modOnlyLabel)
 	RenderOSD()
 }
 

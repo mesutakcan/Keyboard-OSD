@@ -1,76 +1,33 @@
 global IniFile
 global osd
 
-global DEFAULT_SAMPLE_TEXT := "QOL-IW_Â|tl,yg;mn.09"
-
-global sectionMap := Map()
-sectionMap["TextColor"] := "Appearance"
-sectionMap["BgColor"] := "Appearance"
-sectionMap["BgAlpha"] := "Appearance"
-sectionMap["FontName"] := "Appearance"
-sectionMap["FontSize"] := "Appearance"
-sectionMap["FontBold"] := "Appearance"
-sectionMap["FontItalic"] := "Appearance"
-sectionMap["TextPadX"] := "Appearance"
-sectionMap["TextPadY"] := "Appearance"
-sectionMap["TextYNudge"] := "Appearance"
-
-sectionMap["Width"] := "Layout"
-sectionMap["AutoWidth"] := "Layout"
-sectionMap["MaxLines"] := "Layout"
-sectionMap["LineGap"] := "Layout"
-sectionMap["WordWrap"] := "Layout"
-sectionMap["Position"] := "Layout"
-sectionMap["MarginX"] := "Layout"
-sectionMap["MarginY"] := "Layout"
-
-sectionMap["HistTextColor"] := "History"
-sectionMap["HistBgColor"] := "History"
-sectionMap["HistAlpha"] := "History"
-sectionMap["HistTextPadX"] := "History"
-sectionMap["HistTextPadY"] := "History"
-sectionMap["HistTextYNudge"] := "History"
-
-sectionMap["DisplayTime"] := "Timing"
-sectionMap["DismissDelay"] := "Timing"
-sectionMap["ModifierDelay"] := "Timing"
-
-sectionMap["FilterFunctionKeys"] := "Filters"
-sectionMap["FilterNumpad"] := "Filters"
-sectionMap["FilterLetters"] := "Filters"
-sectionMap["FilterOtherLetters"] := "Filters"
-sectionMap["FilterOtherLettersChars"] := "Filters"
-sectionMap["FilterDigits"] := "Filters"
-sectionMap["FilterArrows"] := "Filters"
-sectionMap["FilterNavKeys"] := "Filters"
-sectionMap["FilterModifiers"] := "Filters"
-sectionMap["FilterCustomList"] := "Filters"
-
-sectionMap["SpecialBgColor"] := "Special"
-sectionMap["SpecialTextColor"] := "Special"
-sectionMap["SpecialBorderColor"] := "Special"
-sectionMap["SpecialAlpha"] := "Special"
-sectionMap["SpecialBorderWidth"] := "Special"
-sectionMap["SpecialTextPadX"] := "Special"
-sectionMap["SpecialTextPadY"] := "Special"
-sectionMap["SpecialTextYNudge"] := "Special"
-sectionMap["SpecialKeepStyleInHistory"] := "Special"
+global DEFAULT_SAMPLE_TEXT := "ÂÜg,Wjp;|Il1-_oO0.9wmn"
 
 ShowSettingsGui() {
-	global HotkeyToggleStr, HotkeyHideStr
+	global HotkeyToggleStr, HotkeyHideStr, PendingReload
 	HideOSDInstant()
 	SetTimer(KeyWatcher, 0)
 	try Hotkey(HotkeyToggleStr, "Off")
 	try Hotkey(HotkeyHideStr, "Off")
 
+	if PendingReload {
+		if (MsgBox("Saved settings haven't been applied yet.`nRestart the program now?",
+			"Pending Settings", "YesNo Icon!") = "Yes") {
+			PendingReload := false
+			ClearMeasureTextWidthCache()
+			Reload()
+			return
+		}
+	}
+
 	ExcludedEntries := LoadExcludedKeyEntries()
 
 	SettingsGui := Gui("+AlwaysOnTop", "Keyboard OSD Settings")
+	SettingsGui.Opt("+OwnDialogs")
 	SettingsGui.BackColor := "F0F0F0"
 	SettingsGui.SetFont("s9", "Segoe UI")
 
 	appearanceFont := { name: osd.FontName, size: Number(osd.FontSize), bold: Number(osd.FontBold), italic: Number(osd.FontItalic) }
-	histFont := { name: osd.HistFontName, size: Number(osd.HistFontSize), bold: Number(osd.HistFontBold), italic: Number(osd.HistFontItalic) }
 	specialFont := { name: osd.SpecialFontName, size: Number(osd.SpecialFontSize), bold: Number(osd.SpecialFontBold), italic: Number(osd.SpecialFontItalic) }
 
 	treeX := 8
@@ -89,14 +46,6 @@ ShowSettingsGui() {
 
 	nav := SettingsGui.Add("TreeView", "x" treeX " y" treeY " w" treeW " h" treeH)
 
-	bgColor := SettingsGui.BackColor
-	if (bgColor != "") {
-		r := Integer("0x" SubStr(bgColor, 1, 2))
-		g := Integer("0x" SubStr(bgColor, 3, 2))
-		b := Integer("0x" SubStr(bgColor, 5, 2))
-		DllCall("SendMessage", "Ptr", nav.Hwnd, "UInt", 0x111D, "Ptr", 0, "Ptr", (b << 16) | (g << 8) | r)
-	}
-
 	pageAppearance := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "Appearance")
 	pageLayout := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "Layout")
 	pageHistory := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "History")
@@ -107,8 +56,8 @@ ShowSettingsGui() {
 
 	pages := [pageAppearance, pageLayout, pageHistory, pageSpecial, pageTiming, pageFilters, pageHotkeys]
 
-	nodeAppearance := nav.Add("Appearance")
 	nodeLayout := nav.Add("Layout")
+	nodeAppearance := nav.Add("Appearance")
 	nodeHistory := nav.Add("History")
 	nodeSpecial := nav.Add("Special")
 	nodeTiming := nav.Add("Timing")
@@ -137,28 +86,7 @@ ShowSettingsGui() {
 	if hkHide.ClearBtn
 		pageHotkeys.Add(hkHide.ClearBtn)
 
-	; --- Appearance ---
-	fontNameEdit := AddFontRow(pageAppearance, appearanceFont, cy0, (*) => _UpdateFontPreview(), "TextColor")
-
-	AddColorSetting(pageAppearance, "Text Color", "TextColor")
-	AddColorSetting(pageAppearance, "Background Color", "BgColor")
-	AddSliderSetting(pageAppearance, "Background Alpha", "BgAlpha", "", 1, 255)
-	apprPadXCtrl := AddIntSetting(pageAppearance, "Horizontal Padding", "TextPadX", "", 0, 30)
-	apprPadXCtrl.OnEvent("Change", (*) => _UpdateFontPreview())
-	apprPadYCtrl := AddIntSetting(pageAppearance, "Vertical Padding", "TextPadY", "", 0, 30)
-	apprPadYCtrl.OnEvent("Change", (*) => _UpdateFontPreview())
-	apprTextNudgeCtrl := AddIntSetting(pageAppearance, "Text Y Nudge", "TextYNudge", "", -20, 20)
-	apprTextNudgeCtrl.OnEvent("Change", (*) => _UpdateFontPreview())
-
-	apprSampleEdit := AddSampleTextRow(pageAppearance, "", DEFAULT_SAMPLE_TEXT, (*) => _UpdateFontPreview())
-
-	fontPreviewPic := SettingsGui.Add("Picture", "x" PX " y+10 w290 h40", "")
-	pageAppearance.Add(fontPreviewPic)
-	fontPreviewPic.GetPos(&fontPreviewX, &fontPreviewY)
-	fontPreviewCtrl := SettingsGui.Add("Text", "x" fontPreviewX " y" fontPreviewY " w290 h40 BackgroundTrans +Center +0x200", "Sample Text")
-	pageAppearance.Add(fontPreviewCtrl)
-
-	; --- Layout ---
+; --- Layout ---
 	autoVal := Number(osd.AutoWidth)
 	chkAutoWidth := SettingsGui.Add("Checkbox", "x" PX " y" cy0 " vAutoWidth" (autoVal ? " Checked" : ""), "Auto width")
 	pageLayout.Add(chkAutoWidth)
@@ -173,7 +101,7 @@ ShowSettingsGui() {
 
 	pageLayout.Add(SettingsGui.Add("Text", "x" PX " y+10 w130", "Position:"))
 	posVal := osd.Position
-	posList := ["TopLeft", "TopCenter", "TopRight", "BottomLeft", "BottomCenter", "BottomRight"]
+	posList := ["TopLeft", "TopCenter", "TopRight", "BottomLeft", "BottomCenter", "BottomRight", "Center"]
 	choice := 0
 	for i, v in posList
 		if (v = posVal)
@@ -184,53 +112,60 @@ ShowSettingsGui() {
 	AddIntSetting(pageLayout, "Margin X", "MarginX", "", 0, 200)
 	AddIntSetting(pageLayout, "Margin Y", "MarginY", "", 0, 200)
 
+	; --- Appearance ---
+	fontNameEdit := AddFontRow(pageAppearance, appearanceFont, cy0, (*) => (histFontNameLabel.Text := appearanceFont.name), "TextColor")
+
+	AddColorSetting(pageAppearance, "Text Color", "TextColor")
+	AddColorSetting(pageAppearance, "Background Color", "BgColor")
+	AddSliderSetting(pageAppearance, "Background Alpha", "BgAlpha", "", 1, 255)
+	AddIntSetting(pageAppearance, "Horizontal Padding", "TextPadX", "", 0, 30)
+	AddIntSetting(pageAppearance, "Vertical Padding", "TextPadY", "", 0, 30)
+
+	apprSampleEdit := AddSampleTextRow(pageAppearance, "", DEFAULT_SAMPLE_TEXT, (*) => 0)
+
+	btnPreviewAppearance := SettingsGui.Add("Button", "x" PX " y+14 w100", "Preview")
+	pageAppearance.Add(btnPreviewAppearance)
+	btnPreviewAppearance.OnEvent("Click", (*) => _PreviewAppearance())
+
 	; --- History ---
-	AddFontRow(pageHistory, histFont, cy0, (*) => _UpdateHistPreview())
+	pageHistory.Add(SettingsGui.Add("Text", "x" PX " y" cy0 " w130", "Font name:"))
+	histFontNameLabel := SettingsGui.Add("Text", "x" VX " yp w150", appearanceFont.name)
+	pageHistory.Add(histFontNameLabel)
+
+	AddFloatSetting(pageHistory, "Font Size", "HistFontSize")
 
 	AddColorSetting(pageHistory, "Text Color", "HistTextColor")
 	AddColorSetting(pageHistory, "Background Color", "HistBgColor")
 	AddSliderSetting(pageHistory, "Background Alpha", "HistAlpha", "", 1, 255)
-	histPadXCtrl := AddIntSetting(pageHistory, "Horizontal Padding", "HistTextPadX", "", 0, 30)
-	histPadXCtrl.OnEvent("Change", (*) => _UpdateHistPreview())
-	histPadYCtrl := AddIntSetting(pageHistory, "Vertical Padding", "HistTextPadY", "", 0, 30)
-	histPadYCtrl.OnEvent("Change", (*) => _UpdateHistPreview())
-	histTextNudgeCtrl := AddIntSetting(pageHistory, "Text Y Nudge", "HistTextYNudge", "", -20, 20)
-	histTextNudgeCtrl.OnEvent("Change", (*) => _UpdateHistPreview())
 
-	histSampleEdit := AddSampleTextRow(pageHistory, "", DEFAULT_SAMPLE_TEXT, (*) => _UpdateHistPreview())
+	histSampleEdit := AddSampleTextRow(pageHistory, "", DEFAULT_SAMPLE_TEXT, (*) => 0)
 
-	histPreviewPic := SettingsGui.Add("Picture", "x" PX " y+10 w270 h35", "")
-	pageHistory.Add(histPreviewPic)
-	histPreviewPic.GetPos(&histPreviewX, &histPreviewY)
-	histPreviewCtrl := SettingsGui.Add("Text", "x" histPreviewX " y" histPreviewY " w270 h35 BackgroundTrans +Center +0x200", "Sample History Text")
-	pageHistory.Add(histPreviewCtrl)
+	btnPreviewHistory := SettingsGui.Add("Button", "x" PX " y+14 w100", "Preview")
+	pageHistory.Add(btnPreviewHistory)
+	btnPreviewHistory.OnEvent("Click", (*) => _PreviewHistory())
 
 	; --- Special ---
-	AddFontRow(pageSpecial, specialFont, cy0, (*) => _UpdateSpecialPreview())
+	specialFontNameEdit := AddFontRow(pageSpecial, specialFont, cy0, (*) => 0)
 
 	AddColorSetting(pageSpecial, "Border Color", "SpecialBorderColor")
 	AddColorSetting(pageSpecial, "Fill Color", "SpecialBgColor")
 	AddColorSetting(pageSpecial, "Text Color", "SpecialTextColor")
 	AddSliderSetting(pageSpecial, "Background Alpha", "SpecialAlpha", "", 1, 255)
-	borderWidthCtrl := AddIntSetting(pageSpecial, "Border Width", "SpecialBorderWidth", "", 1, 20)
-	borderWidthCtrl.OnEvent("Change", (*) => _UpdateSpecialPreview())
-	specialPadXCtrl := AddIntSetting(pageSpecial, "Horizontal Padding", "SpecialTextPadX", "", 0, 30)
-	specialPadXCtrl.OnEvent("Change", (*) => _UpdateSpecialPreview())
-	specialPadYCtrl := AddIntSetting(pageSpecial, "Vertical Padding", "SpecialTextPadY", "", 0, 30)
-	specialPadYCtrl.OnEvent("Change", (*) => _UpdateSpecialPreview())
-	textNudgeCtrl := AddIntSetting(pageSpecial, "Text Y Nudge", "SpecialTextYNudge", "", -20, 20)
-	textNudgeCtrl.OnEvent("Change", (*) => _UpdateSpecialPreview())
+	AddIntSetting(pageSpecial, "Border Width", "SpecialBorderWidth", "", 0, 20)
+	AddIntSetting(pageSpecial, "Horizontal Padding", "SpecialTextPadX", "", 0, 30)
+	AddIntSetting(pageSpecial, "Vertical Padding", "SpecialTextPadY", "", 0, 30)
+	AddIntSetting(pageSpecial, "Text Y Nudge", "SpecialTextYNudge", "", -20, 20)
 
-	keepStyleVal := Number(osd.SpecialKeepStyleInHistory)
-	chkKeepStyle := SettingsGui.Add("Checkbox", "x" PX " y+12 vSpecialKeepStyleInHistory" (keepStyleVal ? " Checked" : ""),
-		"Keep style in history")
-	pageSpecial.Add(chkKeepStyle)
+	combineVal := Number(osd.CombineSpecialKeys)
+	chkCombine := SettingsGui.Add("Checkbox", "x" PX " y+12 vCombineSpecialKeys" (combineVal ? " Checked" : ""),
+		"Combine special keys")
+	pageSpecial.Add(chkCombine)
 
-	specialPreviewPic := SettingsGui.Add("Picture", "x" PX " y+10 w200 h50", "")
-	pageSpecial.Add(specialPreviewPic)
-	specialPreviewPic.GetPos(&specialPreviewX, &specialPreviewY)
-	specialPreviewCtrl := SettingsGui.Add("Text", "x" specialPreviewX " y" specialPreviewY " w200 h50 BackgroundTrans +Center +0x200", "Ctrl + PgDn")
-	pageSpecial.Add(specialPreviewCtrl)
+	AddIntSetting(pageSpecial, "Gap Between Keys", "SpecialGap", "", 0, 60)
+
+	btnPreviewSpecial := SettingsGui.Add("Button", "x" PX " y+14 w100", "Preview")
+	pageSpecial.Add(btnPreviewSpecial)
+	btnPreviewSpecial.OnEvent("Click", (*) => _PreviewSpecial())
 
 	; --- Timing ---
 	AddIntSetting(pageTiming, "Display Time (ms)", "DisplayTime", cy0, 100, 10000)
@@ -296,27 +231,30 @@ ShowSettingsGui() {
 	pageFilters.Add(btnRemoveExcl)
 	btnRemoveExcl.OnEvent("Click", _RemoveExcludedKey)
 
-	yBtns := panelY + panelH + 10
-	btnSave := SettingsGui.Add("Button", "Default x" PX " y" yBtns " w80", "Save")
+	btnResetDefaults := SettingsGui.Add("Button", "xm yp+50 w110", "Reset to Defaults")
+	btnResetDefaults.OnEvent("Click", _ResetToDefaults)
+	btnSaveProfile := SettingsGui.Add("Button", "x+5 yp w95", "Save Profile...")
+	btnSaveProfile.OnEvent("Click", _SaveProfileAs)
+	btnLoadProfile := SettingsGui.Add("Button", "x+5 yp w95", "Load Profile...")
+	btnLoadProfile.OnEvent("Click", _LoadProfile)
+
+	btnSave := SettingsGui.Add("Button", "Default x+5 yp w60", "OK")
 	btnSave.OnEvent("Click", SaveSettings)
 	_CloseSettingsGui(*) {
 		try Hotkey(HotkeyToggleStr, "On")
 		try Hotkey(HotkeyHideStr, "On")
 		SetTimer(KeyWatcher, 16)
+		HideOSDInstant()
 		SettingsGui.Destroy()
 	}
 
-	btnCancel := SettingsGui.Add("Button", "x+20 yp w80", "Cancel")
+	btnCancel := SettingsGui.Add("Button", "x+5 yp w60", "Cancel")
 	btnCancel.OnEvent("Click", _CloseSettingsGui)
 	SettingsGui.OnEvent("Close", _CloseSettingsGui)
 
-	_UpdateFontPreview()
-	_UpdateHistPreview()
-	_UpdateSpecialPreview()
-
 	nav.OnEvent("ItemSelect", (ctrl, item) => (nodeToPage.Has(item) ? _ActivatePage(nodeToPage[item]) : 0))
-	nav.Modify(nodeAppearance, "Select")
-	_ActivatePage(pageAppearance)
+	nav.Modify(nodeLayout, "Select")
+	_ActivatePage(pageLayout)
 
 	SettingsGui.Show()
 
@@ -368,12 +306,13 @@ ShowSettingsGui() {
 				colorEdit.Value := fColor
 				_UpdateColorPreview(colorEdit, colorEdit.PreviewCtrl)
 			}
+			_WarnIfFontMissing(fName)
 			updatePreview()
 		}
 	}
 
 	AddIntSetting(page, label, key, yPos := "", minVal := 0, maxVal := 9999) {
-		global osd, sectionMap
+		global osd
 		opt := (yPos != "") ? "x" PX " y" yPos : "x" PX " y+10"
 		page.Add(SettingsGui.Add("Text", opt " w130", label ":"))
 		val := Number(osd.%key%)
@@ -386,6 +325,23 @@ ShowSettingsGui() {
 		if (minVal < 0)
 			editCtrl.OnEvent("Change", _SanitizeSignedInt.Bind(updCtrl, minVal, maxVal))
 		return editCtrl
+	}
+
+	AddFloatSetting(page, label, key, yPos := "", minVal := 0.1) {
+		global osd
+		opt := (yPos != "") ? "x" PX " y" yPos : "x" PX " y+10"
+		page.Add(SettingsGui.Add("Text", opt " w130", label ":"))
+		val := Number(osd.%key%)
+		editCtrl := SettingsGui.Add("Edit", "x" VX " yp-3 w110 v" key, val)
+		page.Add(editCtrl)
+		editCtrl.OnEvent("LoseFocus", _SanitizeFloat.Bind(minVal))
+		return editCtrl
+	}
+
+	_SanitizeFloat(minVal, ctrl, *) {
+		clean := RegExReplace(ctrl.Value, "[^\d.]")
+		n := clean = "" ? minVal : Max(minVal, Number(clean))
+		ctrl.Value := n
 	}
 
 	_SanitizeSignedInt(updCtrl, minVal, maxVal, ctrl, *) {
@@ -407,7 +363,7 @@ ShowSettingsGui() {
 	}
 
 	AddSliderSetting(page, label, key, yPos := "", min := 0, max := 255) {
-		global osd, sectionMap
+		global osd
 		opt := (yPos != "") ? "x" PX " y" yPos : "x" PX " y+8"
 		page.Add(SettingsGui.Add("Text", opt " w130 h22", label ":"))
 		val := Number(osd.%key%)
@@ -415,12 +371,12 @@ ShowSettingsGui() {
 		page.Add(sliderCtrl)
 		textCtrl := SettingsGui.Add("Text", "x+5  yp w30  h22 v" key "Value", val)
 		page.Add(textCtrl)
-		sliderCtrl.OnEvent("Change", (ctrl, *) => (textCtrl.Text := ctrl.Value, _UpdateFontPreview(), _UpdateHistPreview(), _UpdateSpecialPreview()))
+		sliderCtrl.OnEvent("Change", (ctrl, *) => (textCtrl.Text := ctrl.Value))
 		return sliderCtrl
 	}
 
 	AddColorSetting(page, label, key, yPos := "") {
-		global osd, sectionMap
+		global osd
 		opt := (yPos != "") ? "x" PX " y" yPos : "x" PX " y+10"
 		page.Add(SettingsGui.Add("Text", opt " w130", label ":"))
 		val := osd.%key%
@@ -448,9 +404,6 @@ ShowSettingsGui() {
 			clean := "0" clean
 		edit.Value := StrUpper(clean)
 		_UpdateColorPreview(edit, preview)
-		_UpdateFontPreview()
-		_UpdateHistPreview()
-		_UpdateSpecialPreview()
 	}
 
 	_OnColorChange(edit, preview) {
@@ -467,102 +420,146 @@ ShowSettingsGui() {
 			DllCall("SendMessage", "Ptr", edit.Hwnd, "UInt", 0x00B1, "Ptr", newStart, "Ptr", newStart)
 		}
 		_UpdateColorPreview(edit, preview)
-		_UpdateFontPreview()
-		_UpdateHistPreview()
-		_UpdateSpecialPreview()
 	}
 
-	_UpdateFontPreview() {
-		if !IsSet(fontPreviewPic)
-			return
+	_ApplyLayoutOverrides() {
+		saved := {
+			Position: osd.Position, MarginX: osd.MarginX, MarginY: osd.MarginY,
+			Width: osd.Width, AutoWidth: osd.AutoWidth, MaxLines: osd.MaxLines,
+			LineGap: osd.LineGap, WordWrap: osd.WordWrap
+		}
+		osd.Position := SettingsGui["Position"].Text
+		osd.MarginX := Number(SettingsGui["MarginX"].Value)
+		osd.MarginY := Number(SettingsGui["MarginY"].Value)
+		osd.Width := Number(SettingsGui["Width"].Value)
+		osd.AutoWidth := SettingsGui["AutoWidth"].Value
+		osd.MaxLines := Number(SettingsGui["MaxLines"].Value)
+		osd.LineGap := Number(SettingsGui["LineGap"].Value)
+		osd.WordWrap := SettingsGui["WordWrap"].Value
+		return saved
+	}
+
+	_RestoreLayoutOverrides(saved) {
+		osd.Position := saved.Position
+		osd.MarginX := saved.MarginX
+		osd.MarginY := saved.MarginY
+		osd.Width := saved.Width
+		osd.AutoWidth := saved.AutoWidth
+		osd.MaxLines := saved.MaxLines
+		osd.LineGap := saved.LineGap
+		osd.WordWrap := saved.WordWrap
+	}
+
+	_WarnIfFontMissing(fontName) {
+		if IsFontAvailable(fontName)
+			return false
+		SettingsGui.Opt("+OwnDialogs")
+		MsgBox("Font '" fontName "' cannot be drawn (likely an old bitmap font or a typo). Text using it will not appear.`nPlease change the font.", "Font not usable", "Iconx")
+		return true
+	}
+
+	_RunPreview(osdKeys, applyFn, drawFn) {
+		saved := Map()
+		for key in osdKeys
+			saved[key] := osd.%key%
+
+		savedLayout := _ApplyLayoutOverrides()
+		applyFn()
+
+		HideOSDInstant()
+		drawFn()
+		RenderOSD(, true)
+
+		for key in osdKeys
+			osd.%key% := saved[key]
+		_RestoreLayoutOverrides(savedLayout)
+	}
+
+	_ApplyAppearancePreviewValues() {
+		osd.FontName := appearanceFont.name
+		osd.FontSize := appearanceFont.size
+		osd.FontBold := appearanceFont.bold
+		osd.FontItalic := appearanceFont.italic
+		osd.BgColor := SettingsGui["BgColor"].Value
+		osd.BgAlpha := Integer(SettingsGui["BgAlpha"].Value)
+		osd.TextColor := SettingsGui["TextColor"].Value
+		osd.TextPadX := Number(SettingsGui["TextPadX"].Value)
+		osd.TextPadY := Number(SettingsGui["TextPadY"].Value)
+		osd.LineHeight := MeasureTextHeight(osd.FontName, osd.FontSize, osd.FontBold, osd.FontItalic) + osd.TextPadY * 2
+	}
+
+	_PreviewAppearance() {
 		sampleText := apprSampleEdit.Value
-		padX := SettingsGui["TextPadX"].Value
-		padY := SettingsGui["TextPadY"].Value
-		textH := MeasureTextHeight(appearanceFont.name, appearanceFont.size, appearanceFont.bold, appearanceFont.italic)
-		textW := MeasureTextWidth(sampleText, appearanceFont.name, appearanceFont.size, appearanceFont.bold, appearanceFont.italic)
-		pw := textW + padX * 2
-		ph := textH + padY * 2
+		if (sampleText = "")
+			return
+		if _WarnIfFontMissing(appearanceFont.name)
+			return
 
-		bgHex := SettingsGui["BgColor"].Value
-		alphaVal := SettingsGui["BgAlpha"].Value
-		radius := SPECIAL_OUTER_RADIUS
-
-		fontPreviewPic.Move(fontPreviewX, fontPreviewY, pw, ph)
-		RenderPreviewBadge(fontPreviewPic, pw, ph, bgHex, alphaVal, , , radius)
-		fontPreviewPic.Redraw()
-
-		nudge := _SafeNudge(SettingsGui["TextYNudge"].Value)
-		opts := "s" appearanceFont.size
-			. " " (appearanceFont.bold ? "Bold" : "norm")
-			. (appearanceFont.italic ? " Italic" : "")
-			. " c" BlendHexColor(SettingsGui["TextColor"].Value, "FFFFFF", alphaVal)
-
-		fontPreviewCtrl.Move(fontPreviewX, fontPreviewY + nudge, pw, ph - nudge)
-		fontPreviewCtrl.Text := sampleText
-		fontPreviewCtrl.SetFont(opts, appearanceFont.name)
-		fontPreviewCtrl.Redraw()
+		_RunPreview(["FontName", "FontSize", "FontBold", "FontItalic",
+			"BgColor", "BgAlpha", "TextColor", "TextPadX", "TextPadY", "LineHeight"],
+			_ApplyAppearancePreviewValues,
+			() => PushLine(sampleText))
 	}
 
-	_UpdateHistPreview() {
-		if !IsSet(histPreviewPic)
-			return
+	_ApplyHistoryPreviewValues() {
+		osd.FontName := appearanceFont.name
+		osd.FontBold := appearanceFont.bold
+		osd.FontItalic := appearanceFont.italic
+		osd.HistFontSize := Number(SettingsGui["HistFontSize"].Value)
+		osd.HistBgColor := SettingsGui["HistBgColor"].Value
+		osd.HistAlpha := Integer(SettingsGui["HistAlpha"].Value)
+		osd.HistTextColor := SettingsGui["HistTextColor"].Value
+		osd.HistLineHeight := MeasureTextHeight(osd.FontName, osd.HistFontSize, osd.FontBold, osd.FontItalic) + Round(osd.TextPadY * HistTextScale()) * 2
+	}
+
+	_DrawHistoryPreviewLine(sampleText) {
+		PushLine(sampleText)
+		PushEmptyActivePlaceholder()
+	}
+
+	_PreviewHistory() {
 		sampleText := histSampleEdit.Value
-		padX := SettingsGui["HistTextPadX"].Value
-		padY := SettingsGui["HistTextPadY"].Value
-		textH := MeasureTextHeight(histFont.name, histFont.size, histFont.bold, histFont.italic)
-		textW := MeasureTextWidth(sampleText, histFont.name, histFont.size, histFont.bold, histFont.italic)
-		pw := textW + padX * 2
-		ph := textH + padY * 2
-
-		bgHex := SettingsGui["HistBgColor"].Value
-		alphaVal := SettingsGui["HistAlpha"].Value
-		radius := SPECIAL_OUTER_RADIUS
-
-		histPreviewPic.Move(histPreviewX, histPreviewY, pw, ph)
-		RenderPreviewBadge(histPreviewPic, pw, ph, bgHex, alphaVal, , , radius)
-		histPreviewPic.Redraw()
-
-		nudge := _SafeNudge(SettingsGui["HistTextYNudge"].Value)
-		opts := "s" histFont.size
-			. " " (histFont.bold ? "Bold" : "norm")
-			. (histFont.italic ? " Italic" : "")
-			. " c" BlendHexColor(SettingsGui["HistTextColor"].Value, "FFFFFF", alphaVal)
-
-		histPreviewCtrl.Move(histPreviewX, histPreviewY + nudge, pw, ph - nudge)
-		histPreviewCtrl.Text := sampleText
-		histPreviewCtrl.SetFont(opts, histFont.name)
-		histPreviewCtrl.Redraw()
-	}
-
-	_UpdateSpecialPreview() {
-		if !IsSet(specialPreviewPic)
+		if (sampleText = "")
+			return
+		if _WarnIfFontMissing(appearanceFont.name)
 			return
 
-		borderW := Number(SettingsGui["SpecialBorderWidth"].Value)
-		padX := Number(SettingsGui["SpecialTextPadX"].Value)
-		padY := Number(SettingsGui["SpecialTextPadY"].Value)
-		alphaVal := SettingsGui["SpecialAlpha"].Value
-		sampleText := "Ctrl + PgDn"
+		_RunPreview(["FontName", "FontBold", "FontItalic",
+			"HistFontSize", "HistBgColor", "HistAlpha", "HistTextColor", "HistLineHeight"],
+			_ApplyHistoryPreviewValues,
+			() => _DrawHistoryPreviewLine(sampleText))
+	}
 
-		textH := MeasureTextHeight(specialFont.name, specialFont.size, specialFont.bold, specialFont.italic)
-		textW := MeasureTextWidth(sampleText, specialFont.name, specialFont.size, specialFont.bold, specialFont.italic)
-		pw := textW + 2 * (borderW + padX)
-		ph := textH + 2 * (borderW + padY)
+	_ApplySpecialPreviewValues() {
+		osd.SpecialFontName := specialFont.name
+		osd.SpecialFontSize := specialFont.size
+		osd.SpecialFontBold := specialFont.bold
+		osd.SpecialFontItalic := specialFont.italic
+		osd.SpecialBgColor := SettingsGui["SpecialBgColor"].Value
+		osd.SpecialAlpha := Integer(SettingsGui["SpecialAlpha"].Value)
+		osd.SpecialTextColor := SettingsGui["SpecialTextColor"].Value
+		osd.SpecialBorderColor := SettingsGui["SpecialBorderColor"].Value
+		osd.SpecialBorderWidth := Number(SettingsGui["SpecialBorderWidth"].Value)
+		osd.SpecialTextPadX := Number(SettingsGui["SpecialTextPadX"].Value)
+		osd.SpecialTextPadY := Number(SettingsGui["SpecialTextPadY"].Value)
+		osd.SpecialGap := Number(SettingsGui["SpecialGap"].Value)
+		osd.SpecialTextYNudge := _SafeNudge(SettingsGui["SpecialTextYNudge"].Value)
+	}
 
-		specialPreviewPic.Move(specialPreviewX, specialPreviewY, pw, ph)
-		RenderPreviewBadge(specialPreviewPic, pw, ph,
-			SettingsGui["SpecialBgColor"].Value, alphaVal,
-			SettingsGui["SpecialBorderColor"].Value, borderW, SPECIAL_OUTER_RADIUS)
-		specialPreviewPic.Redraw()
+	_DrawSpecialPreviewLine() {
+		PushLine("Ctrl", true)
+		osd.State.Lines[osd.State.Lines.Length].AddSegment("PgDn")
+	}
 
-		nudge := _SafeNudge(SettingsGui["SpecialTextYNudge"].Value)
-		opts := "s" specialFont.size
-			. " " (specialFont.bold ? "Bold" : "norm")
-			. " c" BlendHexColor(SettingsGui["SpecialTextColor"].Value, "FFFFFF", alphaVal)
+	_PreviewSpecial() {
+		if _WarnIfFontMissing(specialFont.name)
+			return
 
-		specialPreviewCtrl.SetFont(opts, specialFont.name)
-		specialPreviewCtrl.Move(specialPreviewX, specialPreviewY + nudge, pw, ph - nudge)
-		specialPreviewCtrl.Redraw()
+		_RunPreview(["SpecialFontName", "SpecialFontSize", "SpecialFontBold", "SpecialFontItalic",
+			"SpecialBgColor", "SpecialAlpha", "SpecialTextColor", "SpecialBorderColor",
+			"SpecialBorderWidth", "SpecialTextPadX", "SpecialTextPadY", "SpecialGap", "SpecialTextYNudge"],
+			_ApplySpecialPreviewValues,
+			_DrawSpecialPreviewLine)
 	}
 
 	_UpdateColorPreview(edit, preview) {
@@ -586,47 +583,248 @@ ShowSettingsGui() {
 		if ((result := ColorDialog.Choose(initColor, ownerHwnd, &custColors)) != -1) {
 			edit.Value := Format("{:06X}", result & 0xFFFFFF)
 			_UpdateColorPreview(edit, preview)
-			_UpdateFontPreview()
-			_UpdateHistPreview()
-			_UpdateSpecialPreview()
 		}
 	}
 
-	SaveSettings(*) {
-		global HotkeyToggleStr, HotkeyHideStr
-		results := SettingsGui.Submit()
+	_FieldSectionMap() {
+		sections := Map()
+		for f in _SettingsFieldTable()
+			sections[f.key] := f.section
+		return sections
+	}
+
+	_WriteSettingsToFile(path) {
+		fieldSections := _FieldSectionMap()
+		results := SettingsGui.Submit(false)
 		for key, value in results.OwnProps() {
-			section := sectionMap.Has(key) ? sectionMap[key] : "Appearance"
-			IniWrite(value, IniFile, section, key)
+			if (key = "Position")
+				value := SettingsGui["Position"].Text
+			section := fieldSections.Has(key) ? fieldSections[key] : "Appearance"
+			IniWrite(value, path, section, key)
 		}
 
-		IniWrite(appearanceFont.name, IniFile, "Appearance", "FontName")
-		IniWrite(appearanceFont.size, IniFile, "Appearance", "FontSize")
-		IniWrite(appearanceFont.bold, IniFile, "Appearance", "FontBold")
-		IniWrite(appearanceFont.italic, IniFile, "Appearance", "FontItalic")
+		IniWrite(appearanceFont.name, path, "Appearance", "FontName")
+		IniWrite(appearanceFont.size, path, "Appearance", "FontSize")
+		IniWrite(appearanceFont.bold, path, "Appearance", "FontBold")
+		IniWrite(appearanceFont.italic, path, "Appearance", "FontItalic")
 
-		IniWrite(histFont.name, IniFile, "History", "HistFontName")
-		IniWrite(histFont.size, IniFile, "History", "HistFontSize")
-		IniWrite(histFont.bold, IniFile, "History", "HistFontBold")
-		IniWrite(histFont.italic, IniFile, "History", "HistFontItalic")
+		IniWrite(specialFont.name, path, "Special", "SpecialFontName")
+		IniWrite(specialFont.size, path, "Special", "SpecialFontSize")
+		IniWrite(specialFont.bold, path, "Special", "SpecialFontBold")
+		IniWrite(specialFont.italic, path, "Special", "SpecialFontItalic")
 
-		IniWrite(specialFont.name, IniFile, "Special", "SpecialFontName")
-		IniWrite(specialFont.size, IniFile, "Special", "SpecialFontSize")
-		IniWrite(specialFont.bold, IniFile, "Special", "SpecialFontBold")
-		IniWrite(specialFont.italic, IniFile, "Special", "SpecialFontItalic")
-
-		IniWrite(radioGroup.Value ? "Group" : "Alone", IniFile, "Filters", "FilterModifierMode")
-		SaveExcludedKeyEntries(ExcludedEntries)
+		IniWrite(radioGroup.Value ? "Group" : "Alone", path, "Filters", "FilterModifierMode")
+		SaveExcludedKeyEntries(ExcludedEntries, path)
 
 		newPauseHotkey := (hkPause.Value != "") ? hkPause.Value : HotkeyToggleStr
-		IniWrite(newPauseHotkey, IniFile, "Hotkeys", "TogglePause")
+		IniWrite(newPauseHotkey, path, "Hotkeys", "TogglePause")
 
 		newHideHotkey := (hkHide.Value != "") ? hkHide.Value : HotkeyHideStr
-		IniWrite(newHideHotkey, IniFile, "Hotkeys", "HideOSD")
+		IniWrite(newHideHotkey, path, "Hotkeys", "HideOSD")
+	}
 
-		MsgBox("Settings saved. The script will now reload to apply changes.", "Reload Script", "IconI")
-		ClearMeasureTextWidthCache()
-		Reload()
+	SaveSettings(*) {
+		global HotkeyToggleStr, HotkeyHideStr, PendingReload
+		if (_WarnIfFontMissing(appearanceFont.name) || _WarnIfFontMissing(specialFont.name))
+			return
+		_WriteSettingsToFile(IniFile)
+		SettingsGui.Hide()
+		SettingsGui.Opt("+OwnDialogs")
+
+		if (MsgBox("Settings saved.`nThe program needs to restart for changes to take effect.`nRestart now?",
+			"Settings Saved", "YesNo Icon!") = "Yes") {
+			PendingReload := false
+			ClearMeasureTextWidthCache()
+			Reload()
+		} else {
+			PendingReload := true
+			_CloseSettingsGui()
+		}
+	}
+
+	_SettingsFieldTable() {
+		return [
+			{ key: "TextColor", section: "Appearance", def: "FFFFFF" },
+			{ key: "BgColor", section: "Appearance", def: "EC3700" },
+			{ key: "BgAlpha", section: "Appearance", def: 200, numeric: true },
+			{ key: "TextPadX", section: "Appearance", def: 8, numeric: true },
+			{ key: "TextPadY", section: "Appearance", def: 5, numeric: true },
+
+			{ key: "AutoWidth", section: "Layout", def: 1, numeric: true },
+			{ key: "WordWrap", section: "Layout", def: 1, numeric: true },
+			{ key: "Width", section: "Layout", def: 350, numeric: true },
+			{ key: "MaxLines", section: "Layout", def: 5, numeric: true },
+			{ key: "LineGap", section: "Layout", def: 2, numeric: true },
+			{ key: "Position", section: "Layout", def: "BottomLeft" },
+			{ key: "MarginX", section: "Layout", def: 20, numeric: true },
+			{ key: "MarginY", section: "Layout", def: 30, numeric: true },
+
+			{ key: "HistTextColor", section: "History", def: "FFFFFF" },
+			{ key: "HistBgColor", section: "History", def: "AAAAAA" },
+			{ key: "HistAlpha", section: "History", def: 150, numeric: true },
+			{ key: "HistFontSize", section: "History", def: 15, numeric: true },
+
+			{ key: "SpecialBorderColor", section: "Special", def: "383838" },
+			{ key: "SpecialBgColor", section: "Special", def: "FFFFFF" },
+			{ key: "SpecialTextColor", section: "Special", def: "000000" },
+			{ key: "SpecialAlpha", section: "Special", def: 175, numeric: true },
+			{ key: "SpecialBorderWidth", section: "Special", def: 3, numeric: true },
+			{ key: "SpecialTextPadX", section: "Special", def: 1, numeric: true },
+			{ key: "SpecialTextPadY", section: "Special", def: 1, numeric: true },
+			{ key: "SpecialTextYNudge", section: "Special", def: 0, numeric: true },
+			{ key: "CombineSpecialKeys", section: "Special", def: 1, numeric: true },
+			{ key: "SpecialGap", section: "Special", def: 3, numeric: true },
+
+			{ key: "DisplayTime", section: "Timing", def: 4000, numeric: true },
+			{ key: "DismissDelay", section: "Timing", def: 3000, numeric: true },
+			{ key: "ModifierDelay", section: "Timing", def: 150, numeric: true },
+
+			{ key: "FilterFunctionKeys", section: "Filters", def: 0, numeric: true },
+			{ key: "FilterNumpad", section: "Filters", def: 0, numeric: true },
+			{ key: "FilterLetters", section: "Filters", def: 0, numeric: true },
+			{ key: "FilterDigits", section: "Filters", def: 0, numeric: true },
+			{ key: "FilterArrows", section: "Filters", def: 0, numeric: true },
+			{ key: "FilterNavKeys", section: "Filters", def: 0, numeric: true },
+			{ key: "FilterModifiers", section: "Filters", def: 0, numeric: true },
+			{ key: "FilterCustomList", section: "Filters", def: 0, numeric: true },
+			{ key: "FilterOtherLetters", section: "Filters", def: 0, numeric: true },
+			{ key: "FilterOtherLettersChars", section: "Filters", def: "" }
+		]
+	}
+
+	_DefaultFontProfile(size) {
+		return { name: "Segoe UI", size: size, bold: 1, italic: 0 }
+	}
+
+	_DefaultSettingsBundle() {
+		values := Map()
+		for f in _SettingsFieldTable()
+			values[f.key] := f.def
+		values["FilterModifierMode"] := "Alone"
+		values["_AppearanceFont"] := _DefaultFontProfile(20)
+		values["_SpecialFont"] := _DefaultFontProfile(20)
+		values["TogglePause"] := "^+F12"
+		values["HideOSD"] := "^+F9"
+		values["_ExcludedEntries"] := []
+		return values
+	}
+
+	_ReadSettingsBundleFromFile(path) {
+		values := Map()
+		for f in _SettingsFieldTable() {
+			raw := IniRead(path, f.section, f.key, f.def)
+			values[f.key] := f.HasOwnProp("numeric") ? Number(raw) : raw
+		}
+		values["FilterModifierMode"] := IniRead(path, "Filters", "FilterModifierMode", "Alone")
+		values["_AppearanceFont"] := {
+			name: IniRead(path, "Appearance", "FontName", "Segoe UI"),
+			size: Number(IniRead(path, "Appearance", "FontSize", 20)),
+			bold: Number(IniRead(path, "Appearance", "FontBold", 1)),
+			italic: Number(IniRead(path, "Appearance", "FontItalic", 0))
+		}
+		values["_SpecialFont"] := {
+			name: IniRead(path, "Special", "SpecialFontName", "Segoe UI"),
+			size: Number(IniRead(path, "Special", "SpecialFontSize", 20)),
+			bold: Number(IniRead(path, "Special", "SpecialFontBold", 1)),
+			italic: Number(IniRead(path, "Special", "SpecialFontItalic", 0))
+		}
+		values["TogglePause"] := IniRead(path, "Hotkeys", "TogglePause", "^+F12")
+		values["HideOSD"] := IniRead(path, "Hotkeys", "HideOSD", "^+F9")
+		values["_ExcludedEntries"] := LoadExcludedKeyEntries(path)
+		return values
+	}
+
+	_ApplySimpleField(key, value) {
+		ctrl := SettingsGui[key]
+		if (key = "Position" || ctrl.Type = "DropDownList")
+			ctrl.Text := value
+		else if (ctrl.Type = "Slider")
+			ctrl.Value := Max(1, Min(255, Number(value)))
+		else if (ctrl.Type = "Checkbox")
+			ctrl.Value := value ? 1 : 0
+		else
+			ctrl.Value := String(value)
+		if (ctrl.Type = "Slider")
+			SettingsGui[key "Value"].Text := ctrl.Value
+		if (ctrl.HasOwnProp("PreviewCtrl"))
+			_UpdateColorPreview(ctrl, ctrl.PreviewCtrl)
+	}
+
+	_ApplySettingsBundle(values) {
+		for f in _SettingsFieldTable()
+			if values.Has(f.key)
+				_ApplySimpleField(f.key, values[f.key])
+
+		_ToggleModifierRadios()
+		if (values.Has("FilterModifierMode") && values["FilterModifierMode"] = "Group")
+			radioGroup.Value := 1
+		else
+			radioAlone.Value := 1
+
+		if values.Has("_AppearanceFont") {
+			f := values["_AppearanceFont"]
+			appearanceFont.name := f.name, appearanceFont.size := f.size
+			appearanceFont.bold := f.bold, appearanceFont.italic := f.italic
+			fontNameEdit.Value := f.name
+			histFontNameLabel.Text := f.name
+		}
+		if values.Has("_SpecialFont") {
+			f := values["_SpecialFont"]
+			specialFont.name := f.name, specialFont.size := f.size
+			specialFont.bold := f.bold, specialFont.italic := f.italic
+			specialFontNameEdit.Value := f.name
+		}
+
+		if values.Has("TogglePause")
+			hkPause.Value := values["TogglePause"]
+		if values.Has("HideOSD")
+			hkHide.Value := values["HideOSD"]
+
+		if values.Has("_ExcludedEntries") {
+			ExcludedEntries := values["_ExcludedEntries"]
+			lstExcluded.Delete()
+			for entry in ExcludedEntries
+				lstExcluded.Add([entry.display])
+		}
+	}
+
+	_ProfilesDir() {
+		dir := A_ScriptDir "\profiles"
+		if !DirExist(dir)
+			DirCreate(dir)
+		return dir
+	}
+
+	_SaveProfileAs(*) {
+		if (_WarnIfFontMissing(appearanceFont.name) || _WarnIfFontMissing(specialFont.name))
+			return
+		SettingsGui.Opt("+OwnDialogs")
+		selected := FileSelect("S16", _ProfilesDir() "\profile.ini", "Save Profile", "Settings (*.ini)")
+		if (selected = "")
+			return
+		if !RegExMatch(selected, "i)\.ini$")
+			selected .= ".ini"
+		_WriteSettingsToFile(selected)
+		SettingsGui.Opt("+OwnDialogs")
+		MsgBox("Profile saved to:`n" selected, "Keyboard OSD", "IconI")
+	}
+
+	_LoadProfile(*) {
+		SettingsGui.Opt("+OwnDialogs")
+		selected := FileSelect(1, _ProfilesDir(), "Load Profile", "Settings (*.ini)")
+		if (selected = "")
+			return
+		_ApplySettingsBundle(_ReadSettingsBundleFromFile(selected))
+		SettingsGui.Opt("+OwnDialogs")
+		MsgBox("Profile loaded into the form. Click OK to apply it.", "Keyboard OSD", "IconI")
+	}
+
+	_ResetToDefaults(*) {
+		SettingsGui.Opt("+OwnDialogs")
+		if (MsgBox("Reset all settings to their defaults?`nThis only changes the form - nothing is applied until you click OK.",
+			"Reset to Defaults", "YesNo Icon!") != "Yes")
+			return
+		_ApplySettingsBundle(_DefaultSettingsBundle())
 	}
 
 	_ToggleModifierRadios(*) {
@@ -659,11 +857,13 @@ ShowSettingsGui() {
 	}
 }
 
-LoadExcludedKeyEntries() {
+LoadExcludedKeyEntries(path := "") {
 	global IniFile
+	if (path = "")
+		path := IniFile
 	entries := []
 	section := ""
-	try section := IniRead(IniFile, "ExcludedKeys")
+	try section := IniRead(path, "ExcludedKeys")
 	if (section = "")
 		return entries
 
@@ -681,13 +881,15 @@ LoadExcludedKeyEntries() {
 	return entries
 }
 
-SaveExcludedKeyEntries(entries) {
+SaveExcludedKeyEntries(entries, path := "") {
 	global IniFile
-	try IniDelete(IniFile, "ExcludedKeys")
+	if (path = "")
+		path := IniFile
+	try IniDelete(path, "ExcludedKeys")
 	i := 0
 	for entry in entries {
 		i += 1
-		IniWrite(entry.raw, IniFile, "ExcludedKeys", "Key" i)
+		IniWrite(entry.raw, path, "ExcludedKeys", "Key" i)
 	}
 }
 
