@@ -88,15 +88,6 @@ You can also toggle pause or hide the OSD with the hotkeys you set on the **Hotk
 
 All options can be changed from the settings window, organized into categories in the sidebar. Changes are saved to `settings.ini` and applied after you restart the script.
 
-[![Settings window](docs/ss_settings.gif)](docs/ss_settings.gif)
-
-### Appearance
-
-- Text and background colors (Windows color picker)
-- Background transparency (alpha)
-- Font family, size, bold, italic (Windows font picker)
-- Horizontal and vertical padding
-
 ### Layout
 
 - Auto width or fixed maximum width
@@ -106,11 +97,24 @@ All options can be changed from the settings window, organized into categories i
 - OSD position: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, Center
 - Margin X / Margin Y from the screen edge
 
+![](docs/settings_1.png)
+
+### Appearance
+
+- Text and background colors (Windows color picker)
+- Background transparency (alpha)
+- Font family, size, bold, italic (Windows font picker)
+- Horizontal and vertical padding
+
+![](docs/settings_2.png)
+
 ### History
 
 - History line font size (uses the same font family and weight as Appearance)
 - History text and background colors
 - History background transparency
+
+![](docs/settings_3.png)
 
 ### Special
 
@@ -123,11 +127,15 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 - Text Y nudge (fine-tune vertical text position)
 - Combine multiple shortcuts pressed in a row into one badge group, with adjustable gap between them
 
+![](docs/settings_4.png)
+
 ### Timing
 
 - Display duration (ms) - how long the active line stays on screen
 - Dismiss delay (ms) - how long each history line stays before fading out
 - Modifier delay (ms) - how long to wait before showing a lone modifier key press
+
+![](docs/settings_5.png)
 
 ### Filters
 
@@ -136,11 +144,15 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 - Modifiers alone or as part of a combination
 - Custom key combinations, managed with an add/remove list
 
+![](docs/settings_6.png)
+
 ### Hotkeys
 
 - Set the hotkey for pausing or resuming the OSD
 - Set the hotkey for hiding all visible OSD rows
 - Click into the box and press a key combination to capture it directly - only keyboard keys are accepted, mouse buttons are not
+
+![](docs/settings_7.png)
 
 ### Profiles
 
