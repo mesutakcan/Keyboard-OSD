@@ -209,7 +209,7 @@ This hides the OSD directly at the window level, so it works even while the OSD 
 
 ## History
 
-### Version 1.9 (2026-09-27)
+### Version 1.9 (2026-09-29)
 
 - Added **Key Names**, letting you assign custom display labels to special keys and modifiers. A renamed key keeps its label in shortcuts, and the settings are saved in profiles.
 - Added a font size box next to the font picker on the Appearance and Special pages, so you no longer need to open the Windows font dialog just to change the size. The History page now uses the same box.
