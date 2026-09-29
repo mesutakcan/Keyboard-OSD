@@ -19,28 +19,32 @@ GetMeasureFont(fontName, fontSize, bold := true, italic := false) {
 	return { hDC: TextMeasureFontHDC, hFont: TextMeasureFontCache[cacheKey] }
 }
 
+global MeasureGdipBitmap := 0
+global MeasureGdipGraphics := 0
+global MeasureGdipFormat := 0
+global BadgeStringFormat := 0
+global TextRowStringFormat := 0
+
 MeasureTextWidthGdip(text, fontName, fontSize, bold := true, italic := false) {
-	global GdipFontCache
-	pBitmap := 0, pGraphics := 0, pFormat := 0
-	DllCall("gdiplus\GdipCreateBitmapFromScan0", "Int", 1, "Int", 1, "Int", 0, "Int", 0x26200A, "Ptr", 0, "Ptr*", &pBitmap)
-	DllCall("gdiplus\GdipGetImageGraphicsContext", "Ptr", pBitmap, "Ptr*", &pGraphics)
+	global MeasureGdipBitmap, MeasureGdipGraphics, MeasureGdipFormat
+	if !MeasureGdipGraphics {
+		DllCall("gdiplus\GdipCreateBitmapFromScan0", "Int", 1, "Int", 1, "Int", 0, "Int", 0x26200A, "Ptr", 0, "Ptr*", &MeasureGdipBitmap)
+		DllCall("gdiplus\GdipGetImageGraphicsContext", "Ptr", MeasureGdipBitmap, "Ptr*", &MeasureGdipGraphics)
+		DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &MeasureGdipFormat)
+		DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", MeasureGdipFormat, "Int", 0)
+		DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", MeasureGdipFormat, "Int", 0)
+		DllCall("gdiplus\GdipSetStringFormatFlags", "Ptr", MeasureGdipFormat, "Int", 0x1000 | 0x4000 | 0x800)
+	}
+
 	fontObj := GetGdipFont(fontName, fontSize, bold, italic)
-	DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &pFormat)
-	DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", pFormat, "Int", 0)
-	DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", pFormat, "Int", 0)
-	DllCall("gdiplus\GdipSetStringFormatFlags", "Ptr", pFormat, "Int", 0x1000 | 0x4000 | 0x800)
 	rect := Buffer(16, 0)
 	NumPut("Float", 0, rect, 0)
 	NumPut("Float", 0, rect, 4)
 	NumPut("Float", 10000, rect, 8)
 	NumPut("Float", 1000, rect, 12)
-	measured := Gdip_MeasureString(pGraphics, text, fontObj.font, pFormat, &rect)
+	measured := Gdip_MeasureString(MeasureGdipGraphics, text, fontObj.font, MeasureGdipFormat, &rect)
 	parts := StrSplit(measured, "|")
-	width := (parts.Length >= 3) ? Ceil(Number(parts[3])) : 0
-	DllCall("gdiplus\GdipDeleteStringFormat", "Ptr", pFormat)
-	DllCall("gdiplus\GdipDeleteGraphics", "Ptr", pGraphics)
-	DllCall("gdiplus\GdipDisposeImage", "Ptr", pBitmap)
-	return width
+	return (parts.Length >= 3) ? Ceil(Number(parts[3])) : 0
 }
 
 HistTextScale() {
@@ -49,10 +53,7 @@ HistTextScale() {
 }
 
 HistBadgeScale() {
-	global osd
-	specialLh := MeasureTextHeight(osd.SpecialFontName, osd.SpecialFontSize, osd.SpecialFontBold, osd.SpecialFontItalic)
-		+ 2 * (osd.SpecialBorderWidth + osd.SpecialTextPadY)
-	return specialLh > 0 ? osd.HistLineHeight / specialLh : 1
+	return Min(1, HistTextScale())
 }
 
 MeasureSpecialBadgeWidth(text, isHistory := false) {
@@ -122,7 +123,8 @@ ClearGdipFontCache(*) {
 }
 
 ClearMeasureTextWidthCache(*) {
-	global TextMeasureFontCache, TextMeasureFontHDC
+	global TextMeasureFontCache, TextMeasureFontHDC, MeasureGdipBitmap, MeasureGdipGraphics, MeasureGdipFormat
+	global BadgeStringFormat, TextRowStringFormat
 	for , hFont in TextMeasureFontCache {
 		if hFont
 			DllCall("DeleteObject", "Ptr", hFont)
@@ -132,6 +134,24 @@ ClearMeasureTextWidthCache(*) {
 	if TextMeasureFontHDC {
 		DllCall("DeleteDC", "Ptr", TextMeasureFontHDC)
 		TextMeasureFontHDC := 0
+	}
+
+	if MeasureGdipGraphics {
+		DllCall("gdiplus\GdipDeleteStringFormat", "Ptr", MeasureGdipFormat)
+		DllCall("gdiplus\GdipDeleteGraphics", "Ptr", MeasureGdipGraphics)
+		DllCall("gdiplus\GdipDisposeImage", "Ptr", MeasureGdipBitmap)
+		MeasureGdipFormat := 0
+		MeasureGdipGraphics := 0
+		MeasureGdipBitmap := 0
+	}
+
+	if BadgeStringFormat {
+		DllCall("gdiplus\GdipDeleteStringFormat", "Ptr", BadgeStringFormat)
+		BadgeStringFormat := 0
+	}
+	if TextRowStringFormat {
+		DllCall("gdiplus\GdipDeleteStringFormat", "Ptr", TextRowStringFormat)
+		TextRowStringFormat := 0
 	}
 }
 
@@ -288,14 +308,14 @@ MakeCombinedSpecialBadgeBitmap(segments, h, totalW, isHistory := false) {
 	fontObj := GetGdipFont(fontName, fontSize, fontBold, fontItalic)
 	pFont := fontObj.font
 
-	pFormat := 0, pTextBrush := 0
-	static sharedFormat := 0
-	if (!sharedFormat) {
-		DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &sharedFormat)
-		DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", sharedFormat, "Int", 1)
-		DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", sharedFormat, "Int", 1)
+	global BadgeStringFormat
+	if (!BadgeStringFormat) {
+		DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &BadgeStringFormat)
+		DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", BadgeStringFormat, "Int", 1)
+		DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", BadgeStringFormat, "Int", 1)
 	}
-	pFormat := sharedFormat
+	pFormat := BadgeStringFormat
+	pTextBrush := 0
 	DllCall("gdiplus\GdipCreateSolidFill", "UInt", HexToARGB(textColor, 255), "Ptr*", &pTextBrush)
 
 	x := 0
@@ -355,15 +375,15 @@ MakeTextRowBitmap(text, h, w, isActive, padX, padY) {
 	fontObj := GetGdipFont(fontName, fontSize, fontBold, fontItalic)
 	pFont := fontObj.font
 
-	pFormat := 0, pTextBrush := 0
-	static sharedFormat := 0
-	if (!sharedFormat) {
-		DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &sharedFormat)
-		DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", sharedFormat, "Int", 0)
-		DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", sharedFormat, "Int", 0)
-		DllCall("gdiplus\GdipSetStringFormatFlags", "Ptr", sharedFormat, "Int", 0x1000 | 0x4000)
+	global TextRowStringFormat
+	if (!TextRowStringFormat) {
+		DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "Ptr*", &TextRowStringFormat)
+		DllCall("gdiplus\GdipSetStringFormatAlign", "Ptr", TextRowStringFormat, "Int", 0)
+		DllCall("gdiplus\GdipSetStringFormatLineAlign", "Ptr", TextRowStringFormat, "Int", 0)
+		DllCall("gdiplus\GdipSetStringFormatFlags", "Ptr", TextRowStringFormat, "Int", 0x1000 | 0x4000)
 	}
-	pFormat := sharedFormat
+	pFormat := TextRowStringFormat
+	pTextBrush := 0
 	DllCall("gdiplus\GdipCreateSolidFill", "UInt", HexToARGB(textHex, 255), "Ptr*", &pTextBrush)
 
 	rect := Buffer(16, 0)
@@ -409,6 +429,9 @@ RenderOSD(extraLine := "", forceRedraw := false) {
 
 	static lastMonW := 0
 	static lastOsdWidth := 0
+	static lastGeom := Map()
+	static lastAlpha := Map()
+	static lastContent := Map()
 	mon := GetActiveMonitorBounds()
 
 	if (mon["w"] != lastMonW || osd.Width != lastOsdWidth) {
@@ -461,7 +484,12 @@ RenderOSD(extraLine := "", forceRedraw := false) {
 
 	specialLh := MeasureTextHeight(osd.SpecialFontName, osd.SpecialFontSize, osd.SpecialFontBold, osd.SpecialFontItalic)
 		+ 2 * (osd.SpecialBorderWidth + osd.SpecialTextPadY)
-	histBadgeLh := osd.HistLineHeight
+	badgeScale := HistBadgeScale()
+	histBorderW := osd.SpecialBorderWidth = 0 ? 0 : Max(1, Round(osd.SpecialBorderWidth * badgeScale))
+	histBadgeLh := MeasureTextHeight(osd.SpecialFontName, osd.SpecialFontSize * badgeScale, osd.SpecialFontBold, osd.SpecialFontItalic)
+		+ 2 * (histBorderW + Max(0, Round(osd.SpecialTextPadY * badgeScale)))
+
+	activeLh := Max(osd.LineHeight, specialLh)
 
 	IsPlaceholderIdx(i) => (visLines[i] = "" && !visSpecial[i])
 
@@ -469,12 +497,12 @@ RenderOSD(extraLine := "", forceRedraw := false) {
 	loop total {
 		li := A_Index
 		if (IsPlaceholderIdx(li)) {
-			rowHeights.Push(osd.LineHeight)
+			rowHeights.Push(activeLh)
 			continue
 		}
 		isAct := (li = activeIdx)
 		isSpecHist := !isAct && visSpecial[li]
-		rowHeights.Push(isAct && visSpecial[li] ? specialLh : (isSpecHist ? histBadgeLh : (isAct ? osd.LineHeight : osd.HistLineHeight)))
+		rowHeights.Push(isAct ? activeLh : (isSpecHist ? histBadgeLh : osd.HistLineHeight))
 	}
 
 	totalH := 0
@@ -545,14 +573,12 @@ RenderOSD(extraLine := "", forceRedraw := false) {
 
 		w := RowWins[winIdx]
 
-		static lastGeom := Map()
-		static lastAlpha := Map()
-		static lastContent := Map()
-
 		rowW := widths[idx]
 		rowBaseX := CalcStackBase(mon, totalH, rowW)[1]
-		rowY := baseY + yOffset
-		geomKey := rowBaseX "," rowY "," rowW "," lh
+		slotY := baseY + yOffset
+		drawH := isActive ? Min(lh, isSpecial ? specialLh : osd.LineHeight) : lh
+		rowY := slotY + (lh - drawH) // 2
+		geomKey := rowBaseX "," rowY "," rowW "," drawH
 
 		contentKey := isSpecialBadge ? (isSpecialHist ? "history|" : "active|") : (isActive ? "text|" : "hist|")
 		if (isSpecialBadge) {
@@ -568,16 +594,16 @@ RenderOSD(extraLine := "", forceRedraw := false) {
 
 		if (contentChanged || geomChanged) {
 			hBmp := isSpecialBadge
-				? MakeCombinedSpecialBadgeBitmap(visSegments[idx], lh, rowW, isSpecialHist)
-				: MakeTextRowBitmap(visLines[idx], lh, rowW, isActive, isActive ? osd.TextPadX : Round(osd.TextPadX * HistTextScale()), isActive ? osd.TextPadY : Round(osd.TextPadY * HistTextScale()))
+				? MakeCombinedSpecialBadgeBitmap(visSegments[idx], drawH, rowW, isSpecialHist)
+				: MakeTextRowBitmap(visLines[idx], drawH, rowW, isActive, isActive ? osd.TextPadX : Round(osd.TextPadX * HistTextScale()), isActive ? osd.TextPadY : Round(osd.TextPadY * HistTextScale()))
 			if (RowBitmaps.Has(winIdx) && RowBitmaps[winIdx])
 				DllCall("DeleteObject", "Ptr", RowBitmaps[winIdx])
 			RowBitmaps[winIdx] := hBmp
 		}
 		if !visible
-			w.Show("NA x" rowBaseX " y" rowY " w" rowW " h" lh)
+			w.Show("NA x" rowBaseX " y" rowY " w" rowW " h" drawH)
 		if (contentChanged || geomChanged || !visible || !lastAlpha.Has(winIdx) || lastAlpha[winIdx] != alpha)
-			UpdateLayeredBitmap(w.Hwnd, RowBitmaps[winIdx], rowBaseX, rowY, rowW, lh, alpha)
+			UpdateLayeredBitmap(w.Hwnd, RowBitmaps[winIdx], rowBaseX, rowY, rowW, drawH, alpha)
 
 		lastGeom[winIdx] := geomKey
 		lastContent[winIdx] := contentKey
@@ -770,8 +796,8 @@ CheckExpiredLines() {
 			FadeLastVisibleRow()
 			osd.State.Lines.RemoveAt(visibleCount)
 			PromoteNextActiveLine()
-		RenderOSD()
-		return
+			RenderOSD()
+			return
 		}
 	}
 
@@ -784,8 +810,8 @@ CheckExpiredLines() {
 		if (ln.IsExpired(osd.DismissDelay)) {
 			FadeFirstVisibleRow()
 			osd.State.Lines.RemoveAt(idx)
-		RenderOSD(osd.State.TypingBuf)
-		return
+			RenderOSD(osd.State.TypingBuf)
+			return
 		}
 	}
 }

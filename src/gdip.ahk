@@ -7,23 +7,23 @@
 CreateRect(&Rect, x, y, w, h)
 {
 	Rect := Buffer(16)
-	NumPut("UInt", x, "UInt", y, "UInt", w, "UInt", h, Rect)
+	NumPut("Int", x, "Int", y, "Int", w, "Int", h, Rect)
 }
 
 WinGetRect(hwnd, &x := "", &y := "", &w := "", &h := "") {
 	CreateRect(&winRect, 0, 0, 0, 0)
 	DllCall("GetWindowRect", "Ptr", hwnd, "Ptr", winRect)
-	x := NumGet(winRect, 0, "UInt")
-	y := NumGet(winRect, 4, "UInt")
-	w := NumGet(winRect, 8, "UInt") - x
-	h := NumGet(winRect, 12, "UInt") - y
+	x := NumGet(winRect, 0, "Int")
+	y := NumGet(winRect, 4, "Int")
+	w := NumGet(winRect, 8, "Int") - x
+	h := NumGet(winRect, 12, "Int") - y
 }
 
 UpdateLayeredWindow(hwnd, hdc, x := "", y := "", w := "", h := "", Alpha := 255)
 {
 	if ((x != "") && (y != "")) {
 		pt := Buffer(8)
-		NumPut("UInt", x, "UInt", y, pt)
+		NumPut("Int", x, "Int", y, pt)
 	}
 
 	if (w = "") || (h = "") {

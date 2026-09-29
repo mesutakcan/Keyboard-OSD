@@ -5,6 +5,10 @@ global DEFAULT_SAMPLE_TEXT := "ÂÜg,Wjp;|Il1-_oO0.9wmn"
 
 ShowSettingsGui() {
 	global HotkeyToggleStr, HotkeyHideStr, PendingReload
+	if WinExist("Keyboard OSD Settings ahk_pid " ProcessExist()) {
+		WinActivate()
+		return
+	}
 	HideOSDInstant()
 	SetTimer(KeyWatcher, 0)
 	try Hotkey(HotkeyToggleStr, "Off")
@@ -21,6 +25,7 @@ ShowSettingsGui() {
 	}
 
 	ExcludedEntries := LoadExcludedKeyEntries()
+	KeyLabelEntries := LoadKeyLabelEntries()
 
 	SettingsGui := Gui("+AlwaysOnTop", "Keyboard OSD Settings")
 	SettingsGui.Opt("+OwnDialogs")
@@ -50,16 +55,18 @@ ShowSettingsGui() {
 	pageLayout := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "Layout")
 	pageHistory := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "History")
 	pageSpecial := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "Special")
+	pageCustomLabels := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "Key Names")
 	pageTiming := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "Timing")
 	pageFilters := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "Filters")
 	pageHotkeys := GroupBox(SettingsGui, panelX, panelY, panelW, panelH, "Hotkeys")
 
-	pages := [pageAppearance, pageLayout, pageHistory, pageSpecial, pageTiming, pageFilters, pageHotkeys]
+	pages := [pageAppearance, pageLayout, pageHistory, pageSpecial, pageCustomLabels, pageTiming, pageFilters, pageHotkeys]
 
 	nodeLayout := nav.Add("Layout")
 	nodeAppearance := nav.Add("Appearance")
 	nodeHistory := nav.Add("History")
 	nodeSpecial := nav.Add("Special")
+	nodeCustomLabels := nav.Add("Key Names")
 	nodeTiming := nav.Add("Timing")
 	nodeFilters := nav.Add("Filters")
 	nodeHotkeys := nav.Add("Hotkeys")
@@ -69,6 +76,7 @@ ShowSettingsGui() {
 	nodeToPage[nodeLayout] := pageLayout
 	nodeToPage[nodeHistory] := pageHistory
 	nodeToPage[nodeSpecial] := pageSpecial
+	nodeToPage[nodeCustomLabels] := pageCustomLabels
 	nodeToPage[nodeTiming] := pageTiming
 	nodeToPage[nodeFilters] := pageFilters
 	nodeToPage[nodeHotkeys] := pageHotkeys
@@ -132,7 +140,7 @@ ShowSettingsGui() {
 	histFontNameLabel := SettingsGui.Add("Text", "x" VX " yp w150", appearanceFont.name)
 	pageHistory.Add(histFontNameLabel)
 
-	AddFloatSetting(pageHistory, "Font Size", "HistFontSize")
+	AddIntSetting(pageHistory, "Font Size", "HistFontSize", "", 6, 200)
 
 	AddColorSetting(pageHistory, "Text Color", "HistTextColor")
 	AddColorSetting(pageHistory, "Background Color", "HistBgColor")
@@ -166,6 +174,52 @@ ShowSettingsGui() {
 	btnPreviewSpecial := SettingsGui.Add("Button", "x" PX " y+14 w100", "Preview")
 	pageSpecial.Add(btnPreviewSpecial)
 	btnPreviewSpecial.OnEvent("Click", (*) => _PreviewSpecial())
+
+	; --- Custom Labels ---
+	enabledVal := Number(osd.CustomLabelsEnabled)
+	chkCustomLabels := SettingsGui.Add("Checkbox", "x" PX " y" cy0 " vCustomLabelsEnabled" (enabledVal ? " Checked" : ""), "Enable custom key names")
+	pageCustomLabels.Add(chkCustomLabels)
+
+	pageCustomLabels.Add(SettingsGui.Add("Text", "x" PX " y+10 w290", "Rename how a key's badge text is shown:"))
+	pageCustomLabels.Add(SettingsGui.Add("Text", "x" PX " y+2 w290 cGray", "Applies to the key alone, with any modifier."))
+
+	hkLabelKey := SettingsGui.AddHotkeyPlus("x" PX " y+8 w120 NoMouse")
+	pageCustomLabels.Add(hkLabelKey.EditCtrl)
+	if hkLabelKey.ClearBtn
+		pageCustomLabels.Add(hkLabelKey.ClearBtn)
+
+	pageCustomLabels.Add(SettingsGui.Add("Text", "x+8 yp+3", "or"))
+	ddlLabelMod := SettingsGui.Add("DropDownList", "x+8 yp-3 w90", ["(modifier)", "Ctrl", "Shift", "Alt", "Win", "AltGr"])
+	ddlLabelMod.Choose(1)
+	pageCustomLabels.Add(ddlLabelMod)
+
+	hkLabelKey.OnEvent("Change", (*) => (hkLabelKey.Value != "" ? ddlLabelMod.Choose(1) : 0))
+	ddlLabelMod.OnEvent("Change", (*) => (ddlLabelMod.Text != "(modifier)" ? hkLabelKey.Clear() : 0))
+
+	edtLabelText := SettingsGui.Add("Edit", "x" PX " y+8 w220", "")
+	pageCustomLabels.Add(edtLabelText)
+
+	btnAddLabel := SettingsGui.Add("Button", "x+8 yp w60", "Add")
+	pageCustomLabels.Add(btnAddLabel)
+	btnAddLabel.OnEvent("Click", _AddKeyLabel)
+
+	txtLabelStatus := SettingsGui.Add("Text", "x" PX " y+6 w290 cRed", "")
+	pageCustomLabels.Add(txtLabelStatus)
+
+	lvLabels := SettingsGui.Add("ListView", "x" PX " y+4 w290 h260", ["Key", "Shows as"])
+	lvLabels.ModifyCol(1, 140)
+	lvLabels.ModifyCol(2, 140)
+	pageCustomLabels.Add(lvLabels)
+	for entry in KeyLabelEntries
+		lvLabels.Add(, entry.display, entry.text)
+
+	btnRemoveLabel := SettingsGui.Add("Button", "x" PX " y+8 w80", "Remove")
+	pageCustomLabels.Add(btnRemoveLabel)
+	btnRemoveLabel.OnEvent("Click", _RemoveKeyLabel)
+
+	btnClearLabels := SettingsGui.Add("Button", "x+8 yp w80", "Clear All")
+	pageCustomLabels.Add(btnClearLabels)
+	btnClearLabels.OnEvent("Click", _ClearKeyLabels)
 
 	; --- Timing ---
 	AddIntSetting(pageTiming, "Display Time (ms)", "DisplayTime", cy0, 100, 10000)
@@ -272,6 +326,15 @@ ShowSettingsGui() {
 		page.Add(btn)
 		edit.OnEvent("Change", (ctrl, *) => (profile.name := ctrl.Value, updatePreview()))
 		btn.OnEvent("Click", (*) => _PickFontFor(profile, edit, updatePreview, colorKey))
+
+		page.Add(SettingsGui.Add("Text", "x" PX " y+8 w130", "Font Size:"))
+		sizeEdit := SettingsGui.Add("Edit", "x" VX " yp-3 w50 Number", profile.size)
+		page.Add(sizeEdit)
+		sizeUpDown := SettingsGui.Add("UpDown", "x+0 y-1 w20 Range6-200", profile.size)
+		page.Add(sizeUpDown)
+		sizeEdit.OnEvent("Change", (ctrl, *) => (ctrl.Value != "" ? (profile.size := Max(6, Min(200, Number(ctrl.Value))), updatePreview()) : 0))
+		sizeEdit.OnEvent("LoseFocus", (ctrl, *) => (ctrl.Value := profile.size))
+		edit.SizeEdit := sizeEdit
 		return edit
 	}
 
@@ -301,6 +364,8 @@ ShowSettingsGui() {
 			profile.bold := bold ? 1 : 0
 			profile.italic := italic ? 1 : 0
 			edit.Value := fName
+			if edit.HasOwnProp("SizeEdit")
+				edit.SizeEdit.Value := fSize
 
 			if (colorEdit != "") {
 				colorEdit.Value := fColor
@@ -325,23 +390,6 @@ ShowSettingsGui() {
 		if (minVal < 0)
 			editCtrl.OnEvent("Change", _SanitizeSignedInt.Bind(updCtrl, minVal, maxVal))
 		return editCtrl
-	}
-
-	AddFloatSetting(page, label, key, yPos := "", minVal := 0.1) {
-		global osd
-		opt := (yPos != "") ? "x" PX " y" yPos : "x" PX " y+10"
-		page.Add(SettingsGui.Add("Text", opt " w130", label ":"))
-		val := Number(osd.%key%)
-		editCtrl := SettingsGui.Add("Edit", "x" VX " yp-3 w110 v" key, val)
-		page.Add(editCtrl)
-		editCtrl.OnEvent("LoseFocus", _SanitizeFloat.Bind(minVal))
-		return editCtrl
-	}
-
-	_SanitizeFloat(minVal, ctrl, *) {
-		clean := RegExReplace(ctrl.Value, "[^\d.]")
-		n := clean = "" ? minVal : Max(minVal, Number(clean))
-		ctrl.Value := n
 	}
 
 	_SanitizeSignedInt(updCtrl, minVal, maxVal, ctrl, *) {
@@ -594,7 +642,11 @@ ShowSettingsGui() {
 	}
 
 	_WriteSettingsToFile(path) {
+		if !FileExist(path)
+			FileAppend("", path, "UTF-16")
+
 		fieldSections := _FieldSectionMap()
+		SaveKeyLabelEntries(KeyLabelEntries, path)
 		results := SettingsGui.Submit(false)
 		for key, value in results.OwnProps() {
 			if (key = "Position")
@@ -616,11 +668,8 @@ ShowSettingsGui() {
 		IniWrite(radioGroup.Value ? "Group" : "Alone", path, "Filters", "FilterModifierMode")
 		SaveExcludedKeyEntries(ExcludedEntries, path)
 
-		newPauseHotkey := (hkPause.Value != "") ? hkPause.Value : HotkeyToggleStr
-		IniWrite(newPauseHotkey, path, "Hotkeys", "TogglePause")
-
-		newHideHotkey := (hkHide.Value != "") ? hkHide.Value : HotkeyHideStr
-		IniWrite(newHideHotkey, path, "Hotkeys", "HideOSD")
+		IniWrite(hkPause.Value, path, "Hotkeys", "TogglePause")
+		IniWrite(hkHide.Value, path, "Hotkeys", "HideOSD")
 	}
 
 	SaveSettings(*) {
@@ -675,6 +724,8 @@ ShowSettingsGui() {
 			{ key: "CombineSpecialKeys", section: "Special", def: 1, numeric: true },
 			{ key: "SpecialGap", section: "Special", def: 3, numeric: true },
 
+			{ key: "CustomLabelsEnabled", section: "KeyLabels", def: 1, numeric: true },
+
 			{ key: "DisplayTime", section: "Timing", def: 4000, numeric: true },
 			{ key: "DismissDelay", section: "Timing", def: 3000, numeric: true },
 			{ key: "ModifierDelay", section: "Timing", def: 150, numeric: true },
@@ -706,6 +757,7 @@ ShowSettingsGui() {
 		values["TogglePause"] := "^+F12"
 		values["HideOSD"] := "^+F9"
 		values["_ExcludedEntries"] := []
+		values["_KeyLabelEntries"] := []
 		return values
 	}
 
@@ -731,6 +783,7 @@ ShowSettingsGui() {
 		values["TogglePause"] := IniRead(path, "Hotkeys", "TogglePause", "^+F12")
 		values["HideOSD"] := IniRead(path, "Hotkeys", "HideOSD", "^+F9")
 		values["_ExcludedEntries"] := LoadExcludedKeyEntries(path)
+		values["_KeyLabelEntries"] := LoadKeyLabelEntries(path)
 		return values
 	}
 
@@ -766,6 +819,7 @@ ShowSettingsGui() {
 			appearanceFont.name := f.name, appearanceFont.size := f.size
 			appearanceFont.bold := f.bold, appearanceFont.italic := f.italic
 			fontNameEdit.Value := f.name
+			fontNameEdit.SizeEdit.Value := f.size
 			histFontNameLabel.Text := f.name
 		}
 		if values.Has("_SpecialFont") {
@@ -773,6 +827,7 @@ ShowSettingsGui() {
 			specialFont.name := f.name, specialFont.size := f.size
 			specialFont.bold := f.bold, specialFont.italic := f.italic
 			specialFontNameEdit.Value := f.name
+			specialFontNameEdit.SizeEdit.Value := f.size
 		}
 
 		if values.Has("TogglePause")
@@ -785,6 +840,13 @@ ShowSettingsGui() {
 			lstExcluded.Delete()
 			for entry in ExcludedEntries
 				lstExcluded.Add([entry.display])
+		}
+
+		if values.Has("_KeyLabelEntries") {
+			KeyLabelEntries := values["_KeyLabelEntries"]
+			lvLabels.Delete()
+			for entry in KeyLabelEntries
+				lvLabels.Add(, entry.display, entry.text)
 		}
 	}
 
@@ -855,6 +917,84 @@ ShowSettingsGui() {
 		ExcludedEntries.RemoveAt(idx)
 		lstExcluded.Delete(idx)
 	}
+
+	_ShowLabelStatus(msg) {
+		static clearTimer := 0
+		if clearTimer
+			SetTimer(clearTimer, 0)
+		txtLabelStatus.Text := msg
+		clearTimer := () => (txtLabelStatus.Text := "")
+		SetTimer(clearTimer, -4000)
+	}
+
+	_AddKeyLabel(*) {
+		modChoice := ddlLabelMod.Text
+		hasMod := (modChoice != "(modifier)")
+		raw := hkLabelKey.Value
+		hasKey := (raw != "")
+		text := Trim(edtLabelText.Value)
+
+		if (text = "") {
+			_ShowLabelStatus("Enter the text to show.")
+			return
+		}
+		if (!hasMod && !hasKey) {
+			_ShowLabelStatus("Press a key or pick a modifier first.")
+			return
+		}
+		if (hasMod && hasKey) {
+			_ShowLabelStatus("Use either a key or a modifier, not both.")
+			return
+		}
+
+		if (hasMod) {
+			keyName := modChoice
+			display := modChoice
+		} else {
+			combo := ParseKeyCombo(raw)
+			if (combo = "") {
+				_ShowLabelStatus("This key can't be given a custom label.")
+				return
+			}
+			m := combo.mods
+			if (m["Ctrl"] || m["Shift"] || m["Alt"] || m["Win"] || m["AltGr"]) {
+				_ShowLabelStatus("Only a single special key can be renamed, not a key combination.")
+				return
+			}
+			keyName := combo.key
+			if IsTypingOnlyKey(keyName) {
+				_ShowLabelStatus("'" HotkeyPlus.BeautifyKeyName(keyName) "' is typed text, not a special key.")
+				return
+			}
+			display := HotkeyPlus.BeautifyKeyName(keyName)
+		}
+
+		for entry in KeyLabelEntries {
+			if (StrLower(entry.key) = StrLower(keyName)) {
+				_ShowLabelStatus("'" display "' is already in the list.")
+				return
+			}
+		}
+
+		KeyLabelEntries.Push({ key: keyName, display: display, text: text })
+		lvLabels.Add(, display, text)
+		hkLabelKey.Clear()
+		ddlLabelMod.Choose(1)
+		edtLabelText.Value := ""
+	}
+
+	_RemoveKeyLabel(*) {
+		idx := lvLabels.GetNext()
+		if (!idx)
+			return
+		KeyLabelEntries.RemoveAt(idx)
+		lvLabels.Delete(idx)
+	}
+
+	_ClearKeyLabels(*) {
+		KeyLabelEntries := []
+		lvLabels.Delete()
+	}
 }
 
 LoadExcludedKeyEntries(path := "") {
@@ -890,6 +1030,25 @@ SaveExcludedKeyEntries(entries, path := "") {
 	for entry in entries {
 		i += 1
 		IniWrite(entry.raw, path, "ExcludedKeys", "Key" i)
+	}
+}
+
+LoadKeyLabelEntries(path := "") {
+	entries := []
+	for combo in LoadKeyLabels(path)
+		entries.Push({ key: combo.key, display: HotkeyPlus.BeautifyKeyName(combo.key), text: combo.text })
+	return entries
+}
+
+SaveKeyLabelEntries(entries, path := "") {
+	global IniFile
+	if (path = "")
+		path := IniFile
+	try IniDelete(path, "KeyLabels")
+	i := 0
+	for entry in entries {
+		i += 1
+		IniWrite(entry.key "|" entry.text, path, "KeyLabels", "Key" i)
 	}
 }
 

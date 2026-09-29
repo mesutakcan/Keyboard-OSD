@@ -25,11 +25,9 @@ Example Usage:
 	MyGui.Show()
 */
 
-; Extend Gui prototype to enable MyGui.AddHotkeyPlus(...) directly
 Gui.Prototype.AddHotkeyPlus := (guiObj, options := "", defaultValue := "") => HotkeyPlus(guiObj, options, defaultValue)
 
 class HotkeyPlus {
-	; Windows Message Constants
 	static WM_DESTROY := 0x0002
 	static WM_NCDESTROY := 0x0082
 	static WM_SETFOCUS := 0x0007
@@ -44,13 +42,11 @@ class HotkeyPlus {
 	static WM_XBUTTONDOWN := 0x020B
 	static DLGC_WANTALLKEYS := 0x0004
 
-	; Private Fields
 	_gui := ""
 	_editCtrl := ""
 	_clearBtn := ""
 	_subclassCb := 0
 	_inputHook := ""
-
 	_value := ""
 	_defaultValue := ""
 	_placeholder := "Press a key..."
@@ -63,25 +59,17 @@ class HotkeyPlus {
 	_loseFocusCallbacks := []
 	_name := ""
 
-	/**
-	 * Creates a new HotkeyPlus control instance.
-	 * @param guiObj Parent Gui object
-	 * @param options Options string (x, y, w, h, vName, NoClear, NoWin, NoMouse, etc.)
-	 * @param defaultValue Initial hotkey string (e.g. "^!Escape")
-	 */
 	__New(guiObj, options := "", defaultValue := "") {
 		this._gui := guiObj
 		this._defaultValue := defaultValue
 		this._value := defaultValue
 
-		; Parse options
 		parsed := this._ParseOptions(options)
 		this._name := parsed.name
 		this._allowWin := !parsed.noWin
 		this._allowMouse := !parsed.noMouse
 		this._noClearBtn := parsed.noClear
 
-		; Compute dimensions
 		editW := parsed.w
 		btnW := 26
 		spacing := 4
@@ -92,15 +80,12 @@ class HotkeyPlus {
 			btnW := 0
 		}
 
-		; Edit Control Options
 		editOpt := "ReadOnly -Multi -Wrap " . parsed.posStr . " w" . editW . " h" . parsed.h
 		if (parsed.otherOpt != "")
 			editOpt .= " " . parsed.otherOpt
 
-		; Create Edit control
 		this._editCtrl := guiObj.Add("Edit", editOpt)
 
-		; Create Clear Button ([✕])
 		if (!this._noClearBtn) {
 			btnOpt := "yp hp w" . btnW . " x+" . spacing
 			this._clearBtn := guiObj.Add("Button", btnOpt, "✕")
@@ -108,10 +93,8 @@ class HotkeyPlus {
 			this._clearBtn.ToolTip := "Clear Hotkey"
 		}
 
-		; Set initial display text
 		this._UpdateDisplayText()
 
-		; Attach subclass window procedure
 		this._subclassCb := CallbackCreate(ObjBindMethod(this, "_SubclassProc"), , 6)
 		DllCall("comctl32\SetWindowSubclass",
 			"ptr", this._editCtrl.Hwnd,
@@ -120,17 +103,10 @@ class HotkeyPlus {
 			"uptr", 0
 		)
 
-		; Clean up subclassing when Gui closes
 		guiObj.OnEvent("Close", (*) => this._Cleanup())
 	}
 
-	; =========================================================================
-	; Properties
-	; =========================================================================
 
-	/**
-	 * Hotkey value in standard AHK format (e.g. "^!Escape", "#+Pause", "F12")
-	 */
 	Value {
 		get => this._value
 		set {
@@ -140,37 +116,19 @@ class HotkeyPlus {
 		}
 	}
 
-	/**
-	 * Human-readable hotkey representation (e.g. "Ctrl + Alt + Escape")
-	 */
 	Text => HotkeyPlus.FormatKeyToText(this._value)
 
-	/**
-	 * Placeholder text displayed when listening for keystrokes
-	 */
 	Placeholder {
 		get => this._placeholder
 		set => this._placeholder := value
 	}
 
-	/**
-	 * HWND handle of the Edit control
-	 */
 	Hwnd => this._editCtrl.Hwnd
 
-	/**
-	 * Underlying Edit control object
-	 */
 	EditCtrl => this._editCtrl
 
-	/**
-	 * Underlying Clear button object (if enabled)
-	 */
 	ClearBtn => this._clearBtn
 
-	/**
-	 * Whether the control is enabled
-	 */
 	Enabled {
 		get => this._editCtrl.Enabled
 		set {
@@ -180,9 +138,6 @@ class HotkeyPlus {
 		}
 	}
 
-	/**
-	 * Whether the control is visible
-	 */
 	Visible {
 		get => this._editCtrl.Visible
 		set {
@@ -192,67 +147,37 @@ class HotkeyPlus {
 		}
 	}
 
-	/**
-	 * Whether the control currently has input focus
-	 */
 	Focused => (DllCall("user32\GetFocus", "ptr") == this._editCtrl.Hwnd)
 
-	/**
-	 * Parent Gui object
-	 */
 	Gui => this._gui
 
-	/**
-	 * Associated variable name (from vOption)
-	 */
 	Name => this._name
 
-	/**
-	 * Whether Windows key (#) combinations are allowed
-	 */
 	AllowWin {
 		get => this._allowWin
 		set => this._allowWin := value
 	}
 
-	/**
-	 * Whether Mouse buttons are allowed as hotkeys
-	 */
 	AllowMouse {
 		get => this._allowMouse
 		set => this._allowMouse := value
 	}
 
-	; =========================================================================
-	; Methods
-	; =========================================================================
 
-	/**
-	 * Focuses the control and activates key listening mode.
-	 */
 	Focus() {
 		this._editCtrl.Focus()
 	}
 
-	/**
-	 * Clears the hotkey value.
-	 */
 	Clear() {
 		this._StopListening()
 		this.Value := ""
 	}
 
-	/**
-	 * Resets the hotkey to its default initial value.
-	 */
 	Reset() {
 		this._StopListening()
 		this.Value := this._defaultValue
 	}
 
-	/**
-	 * Registers an event listener ("Change", "Focus", "LoseFocus").
-	 */
 	OnEvent(eventName, callback) {
 		switch StrLower(eventName) {
 			case "change":
@@ -266,13 +191,6 @@ class HotkeyPlus {
 		}
 	}
 
-	; =========================================================================
-	; Key Listening & Input Capture
-	; =========================================================================
-
-	/**
-	 * Starts listening mode for incoming keystrokes.
-	 */
 	_StartListening() {
 		if (this._isListening)
 			return
@@ -280,7 +198,6 @@ class HotkeyPlus {
 		this._isListening := true
 		this._editCtrl.Value := "[ " . this._placeholder . " ]"
 
-		; Create InputHook without "V" so keys do not leak to background GUI controls
 		this._inputHook := InputHook()
 		this._inputHook.NotifyNonText := true
 		this._inputHook.KeyOpt("{All}", "+N +S")
@@ -292,9 +209,6 @@ class HotkeyPlus {
 		this._TriggerEvent(this._focusCallbacks)
 	}
 
-	/**
-	 * Stops listening mode.
-	 */
 	_StopListening() {
 		if (!this._isListening)
 			return
@@ -308,64 +222,48 @@ class HotkeyPlus {
 		this._TriggerEvent(this._loseFocusCallbacks)
 	}
 
-	/**
-	 * KeyDown handler from InputHook
-	 */
 	_OnHookKeyDown(ih, vk, sc) {
 		if (!this._isListening)
 			return
 
-		; Check if pressed key is a modifier (Ctrl, Alt, Shift, Win)
 		if (this._IsModifierKey(vk)) {
 			this._UpdateModifierPreview()
 			return
 		}
 
-		; Resolve primary key name
 		keyName := this._ResolveKeyName(vk, sc)
 		if (keyName == "")
 			return
 
-		; Retrieve current modifier states
 		isCtrl := GetKeyState("Ctrl", "P")
 		isAlt := GetKeyState("Alt", "P")
 		isShift := GetKeyState("Shift", "P")
 		isWin := (this._allowWin && (GetKeyState("LWin", "P") || GetKeyState("RWin", "P")))
 
-		; Construct AHK hotkey string
 		hotkeyStr := (isWin ? "#" : "")
 			. (isCtrl ? "^" : "")
 			. (isAlt ? "!" : "")
 			. (isShift ? "+" : "")
 			. keyName
 
-		; Save value and finish listening
 		this._StopListening()
 		this.Value := hotkeyStr
 
-		; Shift focus away safely
 		if (this._clearBtn)
 			this._clearBtn.Focus()
 		else
 			DllCall("user32\SetFocus", "ptr", this._gui.Hwnd)
 	}
 
-	/**
-	 * KeyUp handler from InputHook
-	 */
 	_OnHookKeyUp(ih, vk, sc) {
 		if (!this._isListening)
 			return
 
-		; Update modifier preview when modifier release occurs
 		if (this._IsModifierKey(vk)) {
 			this._UpdateModifierPreview()
 		}
 	}
 
-	/**
-	 * Updates live modifier preview while modifiers are held down (e.g. "Ctrl + Alt + ...")
-	 */
 	_UpdateModifierPreview() {
 		if (!this._isListening)
 			return
@@ -390,11 +288,7 @@ class HotkeyPlus {
 			this._editCtrl.Value := newText
 	}
 
-	/**
-	 * Resolves clean, standardized key names from VK and SC codes
-	 */
 	_ResolveKeyName(vk, sc) {
-		; Direct VK-based mappings for special keys
 		static vkMap := Map(
 			0x1B, "Escape",
 			0x13, "Pause",
@@ -422,11 +316,9 @@ class HotkeyPlus {
 		if (vkMap.Has(vk))
 			return vkMap[vk]
 
-		; Function keys: F1 - F24
 		if (vk >= 0x70 && vk <= 0x87)
 			return "F" . (vk - 0x6F)
 
-		; Numpad keys
 		static numpadMap := Map(
 			0x60, "Numpad0", 0x61, "Numpad1", 0x62, "Numpad2", 0x63, "Numpad3", 0x64, "Numpad4",
 			0x65, "Numpad5", 0x66, "Numpad6", 0x67, "Numpad7", 0x68, "Numpad8", 0x69, "Numpad9",
@@ -435,7 +327,6 @@ class HotkeyPlus {
 		if (numpadMap.Has(vk))
 			return numpadMap[vk]
 
-		; General AHK key name resolution
 		keyName := GetKeyName(Format("vk{:x}sc{:x}", vk, sc))
 		if (keyName != "")
 			return keyName
@@ -443,20 +334,13 @@ class HotkeyPlus {
 		return Format("vk{:x}", vk)
 	}
 
-	/**
-	 * Checks if a given Virtual Key code corresponds to a modifier key
-	 */
 	_IsModifierKey(vk) {
-		; Control, Shift, Alt, Win key codes
-		return (vk == 0x11 || vk == 0xA2 || vk == 0xA3 ; Control, LControl, RControl
-			|| vk == 0x10 || vk == 0xA0 || vk == 0xA1 ; Shift, LShift, RShift
-			|| vk == 0x12 || vk == 0xA4 || vk == 0xA5 ; Menu/Alt, LAlt, RAlt
-			|| vk == 0x5B || vk == 0x5C)              ; LWin, RWin
+		return (vk == 0x11 || vk == 0xA2 || vk == 0xA3
+			|| vk == 0x10 || vk == 0xA0 || vk == 0xA1
+			|| vk == 0x12 || vk == 0xA4 || vk == 0xA5
+			|| vk == 0x5B || vk == 0x5C)
 	}
 
-	/**
-	 * Updates the visible text in the Edit control
-	 */
 	_UpdateDisplayText() {
 		if (this._value == "") {
 			this._editCtrl.Value := ""
@@ -465,47 +349,36 @@ class HotkeyPlus {
 		}
 	}
 
-	; =========================================================================
-	; Win32 Subclass Procedure
-	; =========================================================================
-
 	_SubclassProc(hWnd, uMsg, wParam, lParam, uIdSubclass, dwRefData) {
-		; 0. Window destruction: cleanly detach subclass and release callback
 		if (uMsg == HotkeyPlus.WM_NCDESTROY) {
 			this._Cleanup(hWnd, uIdSubclass)
 			return DllCall("comctl32\DefSubclassProc",
 				"ptr", hWnd, "uint", uMsg, "uptr", wParam, "ptr", lParam, "ptr")
 		}
 
-		; 1. Prevent Dialog Manager from intercepting Tab, Enter, Escape
 		if (uMsg == HotkeyPlus.WM_GETDLGCODE) {
 			return HotkeyPlus.DLGC_WANTALLKEYS
 		}
 
-		; 2. Focus gained: start listening
 		if (uMsg == HotkeyPlus.WM_SETFOCUS) {
 			this._StartListening()
 			return 0
 		}
 
-		; 3. Focus lost: stop listening
 		if (uMsg == HotkeyPlus.WM_KILLFOCUS) {
 			this._StopListening()
 			return 0
 		}
 
-		; 4. Suppress default typing characters and beep (WM_CHAR / WM_SYSCHAR)
 		if (uMsg == HotkeyPlus.WM_CHAR || uMsg == HotkeyPlus.WM_SYSCHAR) {
 			return 0
 		}
 
-		; 5. Right-click context menu: Clear and Reset
 		if (uMsg == HotkeyPlus.WM_CONTEXTMENU) {
 			this._ShowContextMenu()
 			return 0
 		}
 
-		; 6. Mouse buttons (when AllowMouse is enabled)
 		if (this._allowMouse && this._isListening) {
 			if (uMsg == HotkeyPlus.WM_MBUTTONDOWN) {
 				this._ApplyMouseHotkey("MButton")
@@ -526,9 +399,6 @@ class HotkeyPlus {
 			"ptr", hWnd, "uint", uMsg, "uptr", wParam, "ptr", lParam, "ptr")
 	}
 
-	/**
-	 * Combines active modifiers with mouse button and assigns as hotkey
-	 */
 	_ApplyMouseHotkey(btnName) {
 		isCtrl := GetKeyState("Ctrl", "P")
 		isAlt := GetKeyState("Alt", "P")
@@ -549,9 +419,6 @@ class HotkeyPlus {
 			DllCall("user32\SetFocus", "ptr", this._gui.Hwnd)
 	}
 
-	/**
-	 * Shows the right-click context menu
-	 */
 	_ShowContextMenu() {
 		m := Menu()
 		m.Add("Clear Hotkey", (*) => this.Clear())
@@ -559,13 +426,7 @@ class HotkeyPlus {
 		m.Show()
 	}
 
-	; =========================================================================
-	; Helpers
-	; =========================================================================
 
-	/**
-	 * Invokes event callbacks safely
-	 */
 	_TriggerEvent(callbacks, args*) {
 		for cb in callbacks {
 			try {
@@ -574,9 +435,6 @@ class HotkeyPlus {
 		}
 	}
 
-	/**
-	 * Parses options string (w, h, x, y, vName, NoClear, NoWin, NoMouse, etc.)
-	 */
 	_ParseOptions(optStr) {
 		res := {
 			w: 180,
@@ -630,9 +488,6 @@ class HotkeyPlus {
 		return res
 	}
 
-	/**
-	 * Removes subclassing and stops active InputHooks
-	 */
 	_Cleanup(hWnd := 0, uIdSubclass := 0) {
 		if (this._subclassCb) {
 			cb := this._subclassCb
@@ -656,9 +511,6 @@ class HotkeyPlus {
 		}
 	}
 
-	/**
-	 * Converts an AHK hotkey string into a human-readable format (e.g. "^!Escape" -> "Ctrl + Alt + Escape")
-	 */
 	static FormatKeyToText(ahkKey) {
 		if (ahkKey == "")
 			return "None"
@@ -678,7 +530,6 @@ class HotkeyPlus {
 			else if (ch == "+")
 				mods .= "Shift + "
 			else if (ch == "~" || ch == "*") {
-				; Skip pass-through and wildcard prefixes in display
 			} else
 				break
 			pos++
@@ -689,9 +540,6 @@ class HotkeyPlus {
 		return mods . mainKey
 	}
 
-	/**
-	 * Beautifies key names for clean human presentation
-	 */
 	static BeautifyKeyName(key) {
 		if (key == "")
 			return ""

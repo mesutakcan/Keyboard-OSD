@@ -1,68 +1,61 @@
 #Requires AutoHotkey v2.0
-; Windows standard Font and Color dialog wrappers
+/*
+==============================================================================
+CommonDialog.ahk
+Windows Standard Common Dialog Wrappers for AutoHotkey v2
+==============================================================================
+Description: Clean, robust, 32-bit & 64-bit compatible AutoHotkey v2 wrappers
+for Windows Common Dialogs:
+	- FontDialog      (ChooseFontW)
+	- ColorDialog     (ChooseColorW)
+==============================================================================
+Author:      Mesut Akcan
+Version:     1.0.0 (2026.09.14)
+Repository:  https://github.com/mesutakcan/CommonDialog-ahk
+==============================================================================
+*/
+
 class FontDialog {
-	; Opens the Windows standard ChooseFontW dialog.
-	; Parameters (all ByRef except hwndOwner):
-	; hwndOwner: owner window handle (0 = no owner)
-	; fontName: [in/out] face name
-	; fontSize: [in/out] point size
-	; bold: [in/out] bool
-	; italic: [in/out] bool
-	; underline: [in/out] bool
-	; strikeout: [in/out] bool
-	; color: [in/out] RGB hex string
-	; charSet: [in/out] lfCharSet byte (e.g. 162 = Turkish, 1 = Default)
-	; effects: show color/underline/strikeout options in the dialog (set false to hide them)
-	; Returns true if OK was clicked, false if cancelled.
 
 	static Choose(hwndOwner, &fontName, &fontSize, &bold, &italic, &underline, &strikeout, &color, &charSet := 1, effects := true) {
-		static LOGFONT_SIZE := 92 ; LOGFONTW: 28 bytes header + 64 bytes face (32 WCHARs)
-		static CF_SIZE_32 := 64 ; CHOOSEFONTW: 28 bytes header + 32 bytes LOGFONTW + 4 bytes COLORREF
-		static CF_SIZE_64 := 104 ; CHOOSEFONTW: 40 bytes header + 32 bytes LOGFONTW + 4 bytes COLORREF
-		; Note: CHOOSEFONTW struct size is 64 bytes on 32-bit and 104 bytes on 64-bit. The LOGFONTW struct is always 92 bytes.
+		static LOGFONT_SIZE := 92
+		static CF_SIZE_32 := 64
+		static CF_SIZE_64 := 104
 		CF_SIZE := A_PtrSize = 8 ? CF_SIZE_64 : CF_SIZE_32
 
-		LF := Buffer(LOGFONT_SIZE, 0) ; LOGFONTW struct
-		CF := Buffer(CF_SIZE, 0) ; CHOOSEFONTW struct
+		LF := Buffer(LOGFONT_SIZE, 0)
+		CF := Buffer(CF_SIZE, 0)
 
-		; Pre-fill LOGFONT so the dialog opens with current values
-		; lfHeight: use negative point-to-pixel conversion so dialog shows correct size
 		if (fontSize > 0)
-			NumPut("Int", -Round(fontSize * A_ScreenDPI / 72), LF, 0) ; lfHeight
-		NumPut("Int", bold ? 700 : 400, LF, 16) ; lfWeight
-		NumPut("UChar", italic ? 1 : 0, LF, 20) ; lfItalic
-		NumPut("UChar", underline ? 1 : 0, LF, 21) ; lfUnderline
-		NumPut("UChar", strikeout ? 1 : 0, LF, 22) ; lfStrikeOut
-		NumPut("UChar", charSet, LF, 23) ; lfCharSet
+			NumPut("Int", -Round(fontSize * A_ScreenDPI / 72), LF, 0)
+		NumPut("Int", bold ? 700 : 400, LF, 16)
+		NumPut("UChar", italic ? 1 : 0, LF, 20)
+		NumPut("UChar", underline ? 1 : 0, LF, 21)
+		NumPut("UChar", strikeout ? 1 : 0, LF, 22)
+		NumPut("UChar", charSet, LF, 23)
 		if (fontName != "")
-			StrPut(fontName, LF.Ptr + 28, 32, "UTF-16") ; lfFaceName
+			StrPut(fontName, LF.Ptr + 28, 32, "UTF-16")
 
-		; CHOOSEFONT struct
-		NumPut("UInt", CF_SIZE, CF, 0) ; lStructSize
-		NumPut("Ptr", hwndOwner, CF, A_PtrSize) ; hwndOwner
-		NumPut("Ptr", LF.Ptr, CF, A_PtrSize * 3) ; lpLogFont
-		; CF_SCREENFONTS=0x1 | CF_INITTOLOGFONTSTRUCT=0x40 | CF_EFFECTS=0x100
+		NumPut("UInt", CF_SIZE, CF, 0)
+		NumPut("Ptr", hwndOwner, CF, A_PtrSize)
+		NumPut("Ptr", LF.Ptr, CF, A_PtrSize * 3)
 		flags := 0x41 | (effects ? 0x100 : 0)
-		NumPut("UInt", flags, CF, A_PtrSize * 4 + 4) ; Flags
+		NumPut("UInt", flags, CF, A_PtrSize * 4 + 4)
 
-		; Convert RGB hex string to BGR integer for COLORREF
 		initColorBGR := 0
 		if (color != "") {
 			colorInt := IsInteger(color) ? color : Integer("0x" color)
 			initColorBGR := ColorDialog._RGBtoBGR(colorInt)
 		}
-		NumPut("UInt", initColorBGR, CF, A_PtrSize * 4 + 8) ; rgbColors (COLORREF)
+		NumPut("UInt", initColorBGR, CF, A_PtrSize * 4 + 8)
 
 		if !DllCall("comdlg32\ChooseFontW", "Ptr", CF.Ptr)
 			return false
 
-		; Read results. Use iPointSize (tenths of a point) for reliable size.
-		; iPointSize is at A_PtrSize * 4.
-		iPointSize := NumGet(CF, A_PtrSize * 4, "Int") ; iPointSize (×10)
+		iPointSize := NumGet(CF, A_PtrSize * 4, "Int")
 		if (iPointSize > 0)
 			fontSize := Max(6, Min(200, Round(iPointSize / 10)))
 		else {
-			; Fallback: derive from lfHeight
 			h := NumGet(LF, 0, "Int")
 			fontSize := Max(6, Min(200, Abs(Round(h * 72 / A_ScreenDPI))))
 		}
@@ -74,7 +67,6 @@ class FontDialog {
 		strikeout := (NumGet(LF, 22, "UChar") != 0)
 		charSet := NumGet(LF, 23, "UChar")
 
-		; Read color and convert BGR to RGB hex string
 		colorBGR := NumGet(CF, A_PtrSize * 4 + 8, "UInt")
 		colorRGB := ColorDialog._RGBtoBGR(colorBGR)
 		color := Format("{:06X}", colorRGB)
@@ -83,19 +75,11 @@ class FontDialog {
 	}
 }
 
-; Windows standard ChooseColorW dialog wrapper
 class ColorDialog {
-	; Opens the Windows standard ChooseColorW dialog.
-	; Parameters:
-	; initColor: initial RGB color (0xRRGGBB)
-	; hwndOwner: owner window handle (0 = no owner)
-	; custColors: [in/out] Array of up to 16 custom RGB colors (persisted by caller)
-	; fullOpen: true = show full panel with custom color area
-	; Returns selected RGB color (0xRRGGBB), or -1 if cancelled.
 
 	static Choose(initColor := 0, hwndOwner := 0, &custColors := "", fullOpen := true) {
 		static p := A_PtrSize
-		flags := fullOpen ? 0x3 : 0x1 ; CC_RGBINIT | CC_FULLOPEN or CC_RGBINIT only
+		flags := fullOpen ? 0x3 : 0x1
 
 		if (!IsObject(custColors))
 			custColors := []
@@ -109,16 +93,15 @@ class ColorDialog {
 			NumPut("UInt", ColorDialog._RGBtoBGR(custColors[A_Index]), CUSTOM, (A_Index - 1) * 4)
 
 		CC := Buffer((p = 4) ? 36 : 72, 0)
-		NumPut("UInt", CC.Size, CC, 0) ; lStructSize
-		NumPut("UPtr", hwndOwner, CC, p) ; hwndOwner
-		NumPut("UInt", ColorDialog._RGBtoBGR(initColor), CC, 3 * p) ; rgbResult
-		NumPut("UPtr", CUSTOM.Ptr, CC, 4 * p) ; lpCustColors
-		NumPut("UInt", flags, CC, 5 * p) ; Flags
+		NumPut("UInt", CC.Size, CC, 0)
+		NumPut("UPtr", hwndOwner, CC, p)
+		NumPut("UInt", ColorDialog._RGBtoBGR(initColor), CC, 3 * p)
+		NumPut("UPtr", CUSTOM.Ptr, CC, 4 * p)
+		NumPut("UInt", flags, CC, 5 * p)
 
 		if !DllCall("comdlg32\ChooseColorW", "UPtr", CC.Ptr, "UInt")
 			return -1
 
-		; Persist custom colors back to caller's array
 		custColors := []
 		loop 16
 			custColors.Push(ColorDialog._RGBtoBGR(NumGet(CUSTOM, (A_Index - 1) * 4, "UInt")))
@@ -126,7 +109,6 @@ class ColorDialog {
 		return ColorDialog._RGBtoBGR(NumGet(CC, 3 * p, "UInt"))
 	}
 
-	; Swap R and B channels: RGB <-> BGR (Windows COLORREF uses BGR)
 	static _RGBtoBGR(c) {
 		return ((c & 0xFF) << 16) | (c & 0xFF00) | ((c >> 16) & 0xFF)
 	}

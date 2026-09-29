@@ -1,5 +1,4 @@
 /*
-=========================
 Keyboard OSD
 =========================
 Keyboard OSD is a lightweight Windows utility that displays keyboard input and
@@ -7,7 +6,7 @@ Keyboard OSD is a lightweight Windows utility that displays keyboard input and
 It is designed for presentations, tutorials, screen recordings,
  and live demonstrations where visible keystrokes make the workflow easier to follow.
 =========================
-13/09/2026
+29/09/2026
 Mesut Akcan
 =========================
 mesutakcan.blogspot.com
@@ -15,15 +14,12 @@ youtube.com/mesutakcan
 =========================
 Detailed information, source code, compiled binaries, and more are available on GitHub:
 https://github.com/mesutakcan/Keyboard-OSD
-=========================
-TODO:
-* Allow key name customization
 */
 
 #Requires AutoHotkey v2
 #SingleInstance Force
 ;@Ahk2Exe-SetDescription Keyboard OSD
-;@Ahk2Exe-SetFileVersion 1.8
+;@Ahk2Exe-SetFileVersion 1.9
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
 ;@Ahk2Exe-AddResource app_icon_pause.ico, 207
@@ -38,12 +34,30 @@ A_ScriptName := "Keyboard OSD"
 #Include "hotkeyplus.ahk"
 #Include "settings-gui.ahk"
 
-AppVer := "1.8"
+AppVer := "1.9"
+
+SetProcessIcon(iconPath) {
+	static WM_SETICON := 0x0080
+	static IMAGE_ICON := 1
+	static LR_LOADFROMFILE := 0x0010
+	static LR_DEFAULTSIZE := 0x0040
+
+	hBig := DllCall("LoadImageW", "Ptr", 0, "Str", iconPath, "UInt", IMAGE_ICON,
+		"Int", 0, "Int", 0, "UInt", LR_LOADFROMFILE | LR_DEFAULTSIZE, "Ptr")
+	hSmall := DllCall("LoadImageW", "Ptr", 0, "Str", iconPath, "UInt", IMAGE_ICON,
+		"Int", 16, "Int", 16, "UInt", LR_LOADFROMFILE, "Ptr")
+
+	if hBig
+		DllCall("SendMessage", "Ptr", A_ScriptHwnd, "UInt", WM_SETICON, "Ptr", 1, "Ptr", hBig)
+	if hSmall
+		DllCall("SendMessage", "Ptr", A_ScriptHwnd, "UInt", WM_SETICON, "Ptr", 0, "Ptr", hSmall)
+}
 
 if !A_IsCompiled {
 	MAINICON := A_ScriptDir "\app_icon.ico"
 	PAUSEICON := A_ScriptDir "\app_icon_pause.ico"
 	Try TraySetIcon(MAINICON, , true)
+	Try SetProcessIcon(MAINICON)
 }
 
 global WM_OSD_HIDE := 0x5555
@@ -56,6 +70,7 @@ OnExternalHide(wParam, lParam, msg, hwnd) {
 IniFile := A_ScriptDir "\settings.ini"
 
 global ExcludedKeyList := LoadExcludedKeys()
+global KeyLabelList := LoadKeyLabels()
 global HotkeyToggleStr := ReadIni("TogglePause", "^+F12", , "Hotkeys")
 global HotkeyHideStr := ReadIni("HideOSD", "^+F9", , "Hotkeys")
 global PauseMenuItemName := "Pause OSD	" FormatComboDisplay(HotkeyToggleStr)
@@ -75,8 +90,8 @@ SetupTrayMenu()
 
 OnExit(ClearMeasureTextWidthCache)
 OnExit(ClearGdipFontCache)
-OnExit(ShutdownGdiplus)
 OnExit(ClearBadgeCache)
+OnExit(ShutdownGdiplus)
 InitGdiplus()
 
 global TextMeasureFontCache := Map()
@@ -140,6 +155,8 @@ class OSDSettings {
 	SpecialTextYNudge := ReadIni("SpecialTextYNudge", 0, true, "Special")
 	CombineSpecialKeys := ReadIni("CombineSpecialKeys", 1, true, "Special")
 	SpecialGap := ReadIni("SpecialGap", 3, true, "Special")
+
+	CustomLabelsEnabled := ReadIni("CustomLabelsEnabled", 1, true, "KeyLabels")
 
 	DisplayTime := ReadIni("DisplayTime", 4000, true, "Timing")
 	DismissDelay := ReadIni("DismissDelay", 3000, true, "Timing")
@@ -254,26 +271,8 @@ TogglePause(ItemName, *) {
 		HideOSDInstant()
 	} else {
 		A_TrayMenu.Uncheck(ItemName)
-		osd.State.DownVKs := Map()
-		osd.State.DownMods := Map()
-
-		Loop 255 {
-			vk := A_Index
-			if IsReservedVK(vk)
-				continue
-			if (DllCall("GetAsyncKeyState", "UShort", vk, "Short") & 0x8000) {
-				if (vk = 0x10 || vk = 0xA0 || vk = 0xA1)
-					osd.State.DownMods[0x10] := "Shift"
-				else if (vk = 0x11 || vk = 0xA2 || vk = 0xA3)
-					osd.State.DownMods[0x11] := "Ctrl"
-				else if (vk = 0x12 || vk = 0xA4 || vk = 0xA5)
-					osd.State.DownMods[0x12] := "Alt"
-				else if (vk = 0x5B || vk = 0x5C)
-					osd.State.DownMods[0x5B] := "Win"
-				else
-					osd.State.DownVKs[vk] := true
-			}
-		}
+		osd.State.DownMods := SnapshotDownKeys().mods
+		osd.State.DownVKs := SnapshotPressedNonModifierVKs()
 
 		ResetOSDState()
 	}
@@ -294,30 +293,45 @@ ShowAbout(*) {
 	)
 }
 
-; VK codes Windows never actually sends for a real key press (unassigned,
-; reserved, or OEM-internal ranges). Shared by KeyWatcher and TogglePause so
-; both scan the same set of real, physical keys.
-IsReservedVK(vk) {
-	return (vk >= 1 && vk <= 7)
-		|| (vk >= 0x0A && vk <= 0x0B)
-		|| (vk >= 0x0E && vk <= 0x0F)
-		|| (vk >= 0x3A && vk <= 0x40)
-		|| (vk >= 0x88 && vk <= 0x8F)
-		|| (vk >= 0x97 && vk <= 0x9F)
-		|| (vk >= 0xD8 && vk <= 0xDA)
-		|| (vk >= 0xF6 && vk <= 0xFE)
-		|| vk = 0x5E || vk = 0xE0 || vk = 0xE8
+RemapModLabel(rawLabel) {
+	if (rawLabel = "")
+		return rawLabel
+	out := ""
+	for tok in StrSplit(rawLabel, " + ")
+		out .= (out = "" ? "" : " + ") LabelText(tok)
+	return out
 }
 
-; Known limitation (accepted, not a bug to chase): this polls key state every 16ms
-; rather than using a WH_KEYBOARD_LL hook. An extremely fast press-release-press of
-; the SAME key can land entirely between two polls and be missed, since only the
-; "is it down right now" state is sampled, not each individual down/up event. A real
-; hook would catch every event but is a bigger architectural change - deliberately
-; not pursued here.
-KeyWatcher() {
-	global osd
+IsReservedVK(vk) {
+	return (vk >= 1 && vk <= 7)
+	|| (vk >= 0x0A && vk <= 0x0B)
+	|| (vk >= 0x0E && vk <= 0x0F)
+	|| (vk >= 0x3A && vk <= 0x40)
+	|| (vk >= 0x88 && vk <= 0x8F)
+	|| (vk >= 0x97 && vk <= 0x9F)
+	|| (vk >= 0xD8 && vk <= 0xDA)
+	|| (vk >= 0xF6 && vk <= 0xFE)
+	|| vk = 0x5E || vk = 0xE0 || vk = 0xE8
+}
 
+IsModifierVK(vk) {
+	return (vk = 0x10 || vk = 0x11 || vk = 0x12 || vk = 0x5B || vk = 0x5C
+		|| (vk >= 0xA0 && vk <= 0xA5))
+}
+
+SnapshotPressedNonModifierVKs() {
+	down := Map()
+	Loop 255 {
+		vk := A_Index
+		if IsReservedVK(vk) || IsModifierVK(vk)
+			continue
+		if (DllCall("GetAsyncKeyState", "UShort", vk, "Short") & 0x8000)
+			down[vk] := true
+	}
+	return down
+}
+
+SnapshotDownKeys() {
 	static modMap := Map(
 		0x10, "Shift", 0xA0, "Shift", 0xA1, "Shift",
 		0x11, "Ctrl", 0xA2, "Ctrl", 0xA3, "Ctrl",
@@ -325,74 +339,58 @@ KeyWatcher() {
 		0x5B, "Win", 0x5C, "Win"
 	)
 
-	tickShift := DllCall("GetAsyncKeyState", "UShort", 0x10, "Short") & 0x8000
 	tickLCtrl := DllCall("GetAsyncKeyState", "UShort", 0xA2, "Short") & 0x8000
 	tickRAlt := DllCall("GetAsyncKeyState", "UShort", 0xA5, "Short") & 0x8000
-	tickCtrl := DllCall("GetAsyncKeyState", "UShort", 0x11, "Short") & 0x8000
-	tickAlt := DllCall("GetAsyncKeyState", "UShort", 0x12, "Short") & 0x8000
-	tickLWin := DllCall("GetAsyncKeyState", "UShort", 0x5B, "Short") & 0x8000
-	tickRWin := DllCall("GetAsyncKeyState", "UShort", 0x5C, "Short") & 0x8000
-	tickIsAltGr := (tickLCtrl && tickRAlt)
+	isAltGr := (tickLCtrl && tickRAlt)
 
-	stillMods := Map()
-	newModAdded := false
+	mods := Map()
 	for vk, name in modMap {
-		isDown := DllCall("GetAsyncKeyState", "UShort", vk, "Short") & 0x8000
-
-		if isDown {
-			canonVK := (vk = 0xA0 || vk = 0xA1) ? 0x10
-				: (vk = 0xA2 || vk = 0xA3) ? 0x11
-				: (vk = 0xA4 || vk = 0xA5) ? 0x12
-				: (vk = 0x5C) ? 0x5B
-				: vk
-			stillMods[canonVK] := name
-
-			if !osd.State.DownMods.Has(canonVK)
-				newModAdded := true
-		}
+		if !(DllCall("GetAsyncKeyState", "UShort", vk, "Short") & 0x8000)
+			continue
+		canonVK := (vk = 0xA0 || vk = 0xA1) ? 0x10
+			: (vk = 0xA2 || vk = 0xA3) ? 0x11
+			: (vk = 0xA4 || vk = 0xA5) ? 0x12
+			: (vk = 0x5C) ? 0x5B
+			: vk
+		mods[canonVK] := name
 	}
+
+	return { mods: mods, isAltGr: isAltGr }
+}
+
+KeyWatcher() {
+	global osd
+
+	snap := SnapshotDownKeys()
+	stillMods := snap.mods
+	tickIsAltGr := snap.isAltGr
+	tickShift := stillMods.Has(0x10)
+	tickCtrl := stillMods.Has(0x11)
+	tickAlt := stillMods.Has(0x12)
+	tickLWin := stillMods.Has(0x5B)
+
+	newModAdded := false
+	for canonVK in stillMods
+		if !osd.State.DownMods.Has(canonVK)
+			newModAdded := true
 	osd.State.DownMods := stillMods
 
-	combinedMod := ""
-	if (tickIsAltGr) {
-		combinedMod := "AltGr"
-	} else {
-		if stillMods.Has(0x11)
-			combinedMod .= (combinedMod = "" ? "" : " + ") "Ctrl"
-		if stillMods.Has(0x10)
-			combinedMod .= (combinedMod = "" ? "" : " + ") "Shift"
-		if stillMods.Has(0x12)
-			combinedMod .= (combinedMod = "" ? "" : " + ") "Alt"
-		if stillMods.Has(0x5B)
-			combinedMod .= (combinedMod = "" ? "" : " + ") "Win"
-	}
+	combinedMod := BuildModLabel(tickCtrl, tickShift, tickAlt, tickLWin, tickIsAltGr)
 
-	stillDown := Map()
+	stillDown := SnapshotPressedNonModifierVKs()
 	newKeys := []
 
-	Loop 255 {
-		vk := A_Index
-
-		if IsReservedVK(vk)
-			continue
-
-		if (vk = 0x10 || vk = 0x11 || vk = 0x12
-			|| vk = 0x5B || vk = 0x5C
-			|| (vk >= 0xA0 && vk <= 0xA5))
-			continue
-
-		if !(DllCall("GetAsyncKeyState", "UShort", vk, "Short") & 0x8000)
+	for vk in stillDown {
+		if osd.State.DownVKs.Has(vk)
 			continue
 
 		key := GetKeyName(Format("vk{:02X}", vk))
-
-		if (key = "")
+		if (key = "") {
+			stillDown.Delete(vk)
 			continue
+		}
 
-		stillDown[vk] := true
-
-		if !osd.State.DownVKs.Has(vk)
-			newKeys.Push([vk, key, tickShift, tickCtrl, tickAlt, tickIsAltGr, (tickLWin || tickRWin)])
+		newKeys.Push([vk, key, tickShift, tickCtrl, tickAlt, tickIsAltGr, tickLWin])
 	}
 
 	osd.State.DownVKs := stillDown
@@ -432,7 +430,7 @@ KeyWatcher() {
 		tapLabel := osd.State.PendingComposeTap
 		osd.State.PendingComposeTap := ""
 
-		if !IsModifierTapExcluded() {
+		if !IsModifierTapExcluded(tapLabel) {
 			FlushTyping()
 
 			CommitSpecialKey(tapLabel)
@@ -444,9 +442,7 @@ KeyWatcher() {
 }
 
 BuildModLabel(hasCtrl, hasShift, hasAlt, hasWin, isAltGr) {
-	if isAltGr
-		return "AltGr"
-	label := ""
+	label := isAltGr ? "AltGr" : ""
 	if (hasCtrl && !isAltGr)
 		label .= (label = "" ? "" : " + ") "Ctrl"
 	if hasShift
@@ -482,12 +478,13 @@ CommitPendingMod(serial := 0) {
 	if (Trim(name) = "")
 		return
 
-	if IsModifierTapExcluded()
+	if IsModifierTapExcluded(name)
 		return
 
 	if (!IsOSDVisible() && osd.State.Lines.Length = 0 && osd.State.TypingBuf = "")
 		ResetOSDState()
 
+	PruneTrailingPlaceholder()
 	FlushTyping()
 	CommitSpecialKey(name, name)
 	RenderOSD()
@@ -496,6 +493,7 @@ CommitPendingMod(serial := 0) {
 CommitSpecialKey(label, subsetCheckLabel := "") {
 	global osd
 	lines := osd.State.Lines
+	shown := RemapModLabel(label)
 
 	if (label = osd.State.LastKey && lines.Length > 0) {
 		lines[lines.Length].Increment()
@@ -505,14 +503,14 @@ CommitSpecialKey(label, subsetCheckLabel := "") {
 
 	if (subsetCheckLabel != "" && lines.Length > 0 && lines[lines.Length].IsSpecial
 		&& osd.State.LastKey != "" && TokensSubsetOf(osd.State.LastKey, subsetCheckLabel)) {
-		lines[lines.Length].ReplaceText(label)
+		lines[lines.Length].ReplaceText(shown)
 		osd.State.LastKey := label
 		EnforceRowWidth()
 		return
 	}
 
 	osd.State.LastKey := label
-	AddSpecialLine(label)
+	AddSpecialLine(shown)
 }
 
 EnforceRowWidth() {
@@ -531,6 +529,8 @@ EnforceRowWidth() {
 	newLine := OSDLine(overflow.Text, true)
 	newLine.Segments[1].Count := overflow.Count
 	lines.Push(newLine)
+	while (lines.Length > osd.MaxLines)
+		lines.RemoveAt(1)
 }
 
 CurrentMaxWidth() {
@@ -645,7 +645,7 @@ HandleKeyPress(foundVK, foundKey, hasShift, hasCtrl, hasAlt, isAltGr, hasWin) {
 	FlushTyping()
 
 	if isAltGr
-		modList := ["AltGr"]
+		modList.InsertAt(1, "AltGr")
 
 	modOnlyLabel := ""
 	for item in modList
@@ -674,6 +674,7 @@ SetupTrayMenu() {
 	A_TrayMenu.Add(HideMenuItemName, (*) => HideOSDInstant())
 	A_TrayMenu.Add()
 	A_TrayMenu.Add("Exit", (*) => ExitApp())
+	A_TrayMenu.Default := "Settings"
 }
 
 try Hotkey(HotkeyToggleStr, (*) => TogglePause(PauseMenuItemName))

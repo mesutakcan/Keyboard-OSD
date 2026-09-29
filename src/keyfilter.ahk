@@ -13,10 +13,7 @@ VKtoChar(vk) {
 	for m in modVKs {
 		if (DllCall("GetAsyncKeyState", "UShort", m, "Short") & 0x8000)
 			NumPut("UChar", 0x80, kbState, m)
-	}
-
-	for m in [0x14, 0x90, 0x91] {
-		if (DllCall("GetKeyState", "UShort", m, "Short") & 0x0001)
+		if (m = 0x14 || m = 0x90 || m = 0x91) && (DllCall("GetKeyState", "UShort", m, "Short") & 0x0001)
 			NumPut("UChar", NumGet(kbState, m, "UChar") | 0x01, kbState, m)
 	}
 	hkl := DllCall("GetKeyboardLayout", "UInt", 0, "Ptr")
@@ -103,7 +100,7 @@ ParseKeyCombo(raw) {
 		}
 	}
 
-	if (entry = "")
+	if (entry = "" && !mods["Ctrl"] && !mods["Shift"] && !mods["Alt"] && !mods["Win"] && !mods["AltGr"])
 		return ""
 
 	return { mods: mods, key: entry }
@@ -153,7 +150,12 @@ IsKeyExcluded(hasCtrl, hasShift, hasAlt, hasWin, isAltGr, keyName, foundVK := 0)
 }
 
 IsKeyInList(list, isAltGr, curCtrl, hasShift, curAlt, hasWin, keyName) {
-	for combo in list {
+	return FindKeyCombo(list, isAltGr, curCtrl, hasShift, curAlt, hasWin, keyName) != ""
+}
+
+FindKeyCombo(list, isAltGr, curCtrl, hasShift, curAlt, hasWin, keyName) {
+	for entry in list {
+		combo := entry.HasOwnProp("combo") ? entry.combo : entry
 		if (StrLower(combo.key) != StrLower(keyName))
 			continue
 		m := combo.mods
@@ -167,9 +169,57 @@ IsKeyInList(list, isAltGr, curCtrl, hasShift, curAlt, hasWin, keyName) {
 			continue
 		if (m["Win"] != hasWin)
 			continue
-		return true
+		return entry
 	}
-	return false
+	return ""
+}
+
+LoadKeyLabels(path := "") {
+	if (path = "")
+		path := IniFile
+	list := []
+	section := ""
+	try section := IniRead(path, "KeyLabels")
+	if (section = "")
+		return list
+
+	for line in StrSplit(section, "`n", "`r") {
+		line := Trim(line)
+		if (line = "")
+			continue
+		eq := InStr(line, "=")
+		val := eq ? SubStr(line, eq + 1) : line
+		pipe := InStr(val, "|")
+		if (!pipe)
+			continue
+		keyName := Trim(SubStr(val, 1, pipe - 1))
+		text := SubStr(val, pipe + 1)
+		if (keyName != "" && text != "")
+			list.Push({ key: keyName, text: text })
+	}
+	return list
+}
+
+FindKeyLabelText(keyName) {
+	global osd, KeyLabelList
+	if (!osd.CustomLabelsEnabled)
+		return ""
+	for entry in KeyLabelList
+		if (StrLower(entry.key) = StrLower(keyName))
+			return entry.text
+	return ""
+}
+
+LabelText(name) {
+	custom := FindKeyLabelText(name)
+	return custom != "" ? custom : name
+}
+
+IsTypingOnlyKey(keyName) {
+	vk := GetKeyVK(keyName)
+	if (!vk)
+		return false
+	return IsTypingVK(vk, &ch)
 }
 
 IsKeyExcludedByCategory(keyName, foundVK := 0) {
@@ -201,9 +251,22 @@ IsKeyExcludedByCategory(keyName, foundVK := 0) {
 	return false
 }
 
-IsModifierTapExcluded() {
-	global osd
-	return (osd.FilterModifiers && osd.FilterModifierMode = "Alone")
+IsModifierTapExcluded(label := "") {
+	global osd, ExcludedKeyList, SystemExcludedKeyList
+	if (osd.FilterModifiers && osd.FilterModifierMode = "Alone")
+		return true
+
+	if (label = "")
+		return false
+
+	mods := Map("Ctrl", false, "Shift", false, "Alt", false, "Win", false, "AltGr", false)
+	for tok in StrSplit(label, " + ")
+		mods[tok] := true
+
+	if IsKeyInList(SystemExcludedKeyList, mods["AltGr"], mods["Ctrl"], mods["Shift"], mods["Alt"], mods["Win"], "")
+		return true
+
+	return osd.FilterCustomList && IsKeyInList(ExcludedKeyList, mods["AltGr"], mods["Ctrl"], mods["Shift"], mods["Alt"], mods["Win"], "")
 }
 
 TokensSubsetOf(subLabel, fullLabel) {
