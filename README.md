@@ -1,6 +1,6 @@
 # Keyboard OSD
 
-[![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/) [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows) [![License](https://img.shields.io/badge/License-GPL-blue.svg)](https://github.com/mesutakcan/Keyboard-OSD/blob/main/LICENSE) [![Version](https://img.shields.io/badge/Version-1.8-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
+[![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/) [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows) [![License](https://img.shields.io/badge/License-GPL-blue.svg)](https://github.com/mesutakcan/Keyboard-OSD/blob/main/LICENSE) [![Version](https://img.shields.io/badge/Version-1.9-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
 
 [![GitHub stars](https://img.shields.io/github/stars/mesutakcan/Keyboard-OSD?style=social)](https://github.com/mesutakcan/Keyboard-OSD) [![GitHub forks](https://img.shields.io/github/forks/mesutakcan/Keyboard-OSD?style=social)](https://github.com/mesutakcan/Keyboard-OSD) [![GitHub issues](https://img.shields.io/github/issues/mesutakcan/Keyboard-OSD)](https://github.com/mesutakcan/Keyboard-OSD) [![Downloads](https://img.shields.io/github/downloads/mesutakcan/Keyboard-OSD/total)](https://github.com/mesutakcan/Keyboard-OSD/releases)
 
@@ -28,6 +28,7 @@ Keyboard OSD demo video: https://youtu.be/UvLldgMmC-Q
 - Pause and resume anytime with a hotkey you set yourself, or from the tray menu.
 - Filter unwanted key categories or individual key combinations from the OSD.
 - Configure the pause and hide-OSD hotkeys from the settings window, with quick capture and a clear button.
+- Rename special keys and modifiers with custom labels, including when a renamed key is pressed with modifiers.
 - Save your settings as a named profile and load a different one later, or reset everything back to defaults.
 - Can be hidden by another script or application, without simulating a keypress, handy for screen recording setups.
 - Compiled version is a single portable `.exe`, no separate icon files or installation needed.
@@ -82,6 +83,8 @@ The application runs in the system tray. Right-click the tray icon to open:
 - `Hide OSD` - hide all visible OSD rows
 - `Exit` - close the application
 
+Double-clicking the tray icon opens Settings directly.
+
 You can also toggle pause or hide the OSD with the hotkeys you set on the **Hotkeys** settings page.
 
 ## Settings
@@ -103,14 +106,14 @@ All options can be changed from the settings window, organized into categories i
 
 - Text and background colors (Windows color picker)
 - Background transparency (alpha)
-- Font family, size, bold, italic (Windows font picker)
+- Font family, bold, italic (Windows font picker), with a separate font size box
 - Horizontal and vertical padding
 
 ![](docs/settings_2.png)
 
 ### History
 
-- History line font size (uses the same font family and weight as Appearance)
+- History line font size (uses the same font family and weight as Appearance), with the same size box as the other pages
 - History text and background colors
 - History background transparency
 
@@ -120,6 +123,7 @@ All options can be changed from the settings window, organized into categories i
 
 Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</kbd>, <kbd>Shift</kbd>, <kbd>Escape</kbd>, <kbd>Tab</kbd>):
 
+- Font family, bold, italic (Windows font picker), with a separate font size box
 - Border color, fill color, text color
 - Badge transparency (alpha)
 - Border width
@@ -129,13 +133,23 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 
 ![](docs/settings_4.png)
 
+### Key Names
+
+- Give a special key or modifier a custom display label (for example, show `Escape` as `Esc` or `Ctrl` as `Control`).
+- A key's custom label also appears when that key is pressed with modifiers, such as `Ctrl+Esc`.
+- Enable or disable custom labels, and add, remove, or clear labels from the list.
+- Labels can be assigned to one special key or one modifier at a time. Typing keys and key combinations cannot be renamed.
+- Key Names settings are saved with the rest of your settings and included in profiles.
+
+![](docs/settings_5.png)
+
 ### Timing
 
 - Display duration (ms) - how long the active line stays on screen
 - Dismiss delay (ms) - how long each history line stays before fading out
 - Modifier delay (ms) - how long to wait before showing a lone modifier key press
 
-![](docs/settings_5.png)
+![](docs/settings_6.png)
 
 ### Filters
 
@@ -144,15 +158,16 @@ Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</k
 - Modifiers alone or as part of a combination
 - Custom key combinations, managed with an add/remove list
 
-![](docs/settings_6.png)
+![](docs/settings_7.png)
 
 ### Hotkeys
 
 - Set the hotkey for pausing or resuming the OSD
 - Set the hotkey for hiding all visible OSD rows
 - Click into the box and press a key combination to capture it directly - only keyboard keys are accepted, mouse buttons are not
+- Clear a hotkey to disable it - it stays disabled after saving, instead of falling back to its old value
 
-![](docs/settings_7.png)
+![](docs/settings_8.png)
 
 ### Profiles
 
@@ -184,7 +199,33 @@ This hides the OSD directly at the window level, so it works even while the OSD 
 - Keystroke display may vary slightly depending on your active keyboard layout.
 - The compiled `.exe` has all icons built in, so it works standalone. When running from source, keep `app_icon.ico` and `app_icon_pause.ico` in the same folder as the script.
 
+## Known Issues
+
+- **Very brief key presses can be missed.** Keyboard OSD checks key state every 16 ms, so a press and release that happen between checks may not be detected, especially when the same key is pressed rapidly several times.
+- **Some AltGr combinations may be displayed unexpectedly.** Windows reports AltGr as left Ctrl plus right Alt, which can be indistinguishable from pressing Ctrl and Alt separately. In some cases, combinations such as AltGr with Win may appear as typed text instead of a shortcut badge.
+- **Some custom label characters may appear as empty boxes.** The selected font may not contain a glyph for every Unicode character. Choose a font that supports the character; common arrows such as `→` and `←` work with Segoe UI.
+- **Row spacing can vary with font and padding settings.** A small active badge may leave extra space before the history rows, and text and badge history rows can have different heights.
+- **When running from source, some windows may show the default AutoHotkey icon.** The compiled executable is not affected.
+
 ## History
+
+### Version 1.9 (2026-09-27)
+
+- Added **Key Names**, letting you assign custom display labels to special keys and modifiers. A renamed key keeps its label in shortcuts, and the settings are saved in profiles.
+- Added a font size box next to the font picker on the Appearance and Special pages, so you no longer need to open the Windows font dialog just to change the size. The History page now uses the same box.
+- Double-clicking the tray icon now opens Settings directly.
+- Clearing a hotkey and saving now actually disables it, instead of quietly bringing back the old value.
+- Shortcut and modifier badges now keep their own size and padding instead of stretching to match the active text line, so small badge settings no longer get inflated to the plain-text row height.
+
+**Fixes:**
+
+- Fixed <kbd>AltGr</kbd> combinations dropping <kbd>Shift</kbd> or <kbd>Win</kbd> from the badge - AltGr+Shift+key and AltGr+Win+key now show the full combination.
+- Fixed history badges sometimes appearing larger than the active badge when History and Special used very different font sizes.
+- Fixed the active row occasionally jumping upward after pressing <kbd>Enter</kbd> and then holding a modifier key.
+- Fixed a small gap on the right side of typed text that didn't match the gap on the left.
+- Fixed the OSD appearing in the wrong spot on setups where a second monitor sits to the left of or above the main one.
+
+---
 
 ### Version 1.8 (2026-09-13)
 
@@ -302,6 +343,7 @@ Contributions are welcome! If you'd like to add features, fix bugs, or improve t
 
 Keyboard OSD builds on a few other open-source projects:
 
+- [CommonDialog](https://github.com/mesutakcan/CommonDialog-ahk) by Mesut Akcan - wraps the Windows font and color picker dialogs used in the settings window.
 - [GroupBox](https://github.com/mesutakcan/GroupBox) by Mesut Akcan - the container control used to group settings on each page.
 - [HotkeyPlus](https://github.com/mesutakcan/hotkeyplus-ahk) by Mesut Akcan - the hotkey capture control used on the Hotkeys and Filters pages.
 - [AHKv2-Gdip](https://github.com/buliasz/AHKv2-Gdip) by buliasz - `gdip.ahk` is a trimmed-down copy of this library, keeping only the drawing functions Keyboard OSD needs.
