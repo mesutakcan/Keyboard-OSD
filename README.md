@@ -1,335 +1,215 @@
-# Keyboard OSD
+# AS Image Viewer v1.9
 
-[![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/) [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows) [![License](https://img.shields.io/badge/License-GPL-blue.svg)](https://github.com/mesutakcan/Keyboard-OSD/blob/main/LICENSE) [![Version](https://img.shields.io/badge/Version-1.9-brightgreen.svg)](https://github.com/mesutakcan/Keyboard-OSD/releases)
+[![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
+[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
+[![License](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.9-brightgreen.svg)](https://github.com/mesutakcan/AS-Image-Viewer/releases) 
 
-[![GitHub stars](https://img.shields.io/github/stars/mesutakcan/Keyboard-OSD?style=social)](https://github.com/mesutakcan/Keyboard-OSD) [![GitHub forks](https://img.shields.io/github/forks/mesutakcan/Keyboard-OSD?style=social)](https://github.com/mesutakcan/Keyboard-OSD) [![GitHub issues](https://img.shields.io/github/issues/mesutakcan/Keyboard-OSD)](https://github.com/mesutakcan/Keyboard-OSD) [![Downloads](https://img.shields.io/github/downloads/mesutakcan/Keyboard-OSD/total)](https://github.com/mesutakcan/Keyboard-OSD/releases)
+![GitHub stars](https://img.shields.io/github/stars/mesutakcan/AS-Image-Viewer?style=social)
+![GitHub forks](https://img.shields.io/github/forks/mesutakcan/AS-Image-Viewer?style=social)
+![GitHub issues](https://img.shields.io/github/issues/mesutakcan/AS-Image-Viewer)
+[![Downloads](https://img.shields.io/github/downloads/mesutakcan/AS-Image-Viewer/total)](https://github.com/mesutakcan/AS-Image-Viewer/releases)
 
-Keyboard OSD is a lightweight Windows utility that shows keyboard input and shortcut combinations on screen in real time. It's made for presentations, tutorials, screen recordings, and live demos where visible keystrokes help the viewer follow along.
+AS Image Viewer is a minimalist image viewer application that uses GDI+ for rendering. It supports multiple image formats and allows easy navigation and management through a simple GUI interface.
 
-[![Keyboard OSD demo](docs/ss_keyboard_osd.gif)](docs/ss_keyboard_osd.gif)
-
-Keyboard OSD demo video: https://youtu.be/UvLldgMmC-Q
+![Screenshot v1.1](docs/app-screen-shot.jpg "Screenshot v1.1")
 
 ## Features
 
-- Shows your typed text and shortcut combinations on screen in real time.
-- Shortcuts and modifier keys (like <kbd>Ctrl+C</kbd> or <kbd>Shift</kbd>) show up as badges, clearly separated from regular typed text.
-- Repeated key presses are grouped with a counter instead of piling up on screen.
-- Multiple shortcuts pressed back to back can combine into a single row (e.g. <kbd>Ctrl</kbd> then <kbd>PgDn</kbd>), instead of each one taking its own line.
-- Keeps a short history of recent keys, with each line fading out on its own timer.
-- Optional word wrap for longer typed text, and natural backspace handling while typing.
-- Pressing <kbd>Enter</kbd> while typing sends the line to history right away, instead of waiting for it to time out.
-- Works with common modifiers: <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, <kbd>Alt</kbd>, <kbd>Win</kbd>, and AltGr.
-- Click-through overlay - it never gets in the way of the window you're working in.
-- Automatically follows the active window to the correct monitor.
-- Fully customizable from a settings window: colors, fonts, size, transparency, position, margins, padding, and timing, all with a live preview.
-- Smooth fade-out animations and rounded corners on every row.
-- History lines use the same font as the active line, at their own size, with their own colors and transparency.
-- Pause and resume anytime with a hotkey you set yourself, or from the tray menu.
-- Filter unwanted key categories or individual key combinations from the OSD.
-- Configure the pause and hide-OSD hotkeys from the settings window, with quick capture and a clear button.
-- Rename special keys and modifiers with custom labels, including when a renamed key is pressed with modifiers.
-- Save your settings as a named profile and load a different one later, or reset everything back to defaults.
-- Can be hidden by another script or application, without simulating a keypress, handy for screen recording setups.
-- Compiled version is a single portable `.exe`, no separate icon files or installation needed.
+- Image rendering with GDI+
+- Supported formats: JPG, JPEG, PNG, GIF, BMP, TIF, ICO, WEBP, WMF
+- Easy navigation: Previous/next image with left/right arrow keys
+- Zoom in and out: Using Numpad + and - keys
+- Refresh image with F5 key
+- Simple and user-friendly interface
+- Always on top option
+- Center image option
+- Right-click menu with icons
+- Drag and drop support
+- Command line support for opening images
+- File information display
+- Window border toggle option
+- Save last window position, folder and settings
+- Language support
+- Automatic language detection based on the system language
+- Delete current image
+- Copy image to clipboard
+- Paste image from clipboard
+- Custom frameless window with minimize and close controls shown on hover
+- Improved image rendering with a cached paint buffer
+- More precise zoom levels, including high magnification
+- Improved image loading and memory handling
+- Fixed an issue where the image could disappear after the window was moved off-screen and then brought back
 
 ## Requirements
 
-- Windows
-- For the compiled release: no AutoHotkey installation is required.
-- For running from source: [AutoHotkey v2](https://www.autohotkey.com/) is required.
+- Windows (32-bit or 64-bit)
+- [AutoHotkey v2](https://www.autohotkey.com/) (only required if running the source code directly)
 
-## Files
+## Installation
 
-| File                 | Description                                                                |
-| -------------------- | -------------------------------------------------------------------------- |
-| `keyboard-osd.ahk`   | Main script - handles the tray menu and displays your keystrokes on screen |
-| `render.ahk`         | Drawing code: turns each row into an image and puts it on screen           |
-| `keyfilter.ahk`      | Decides which key presses count as typing and which ones get filtered out  |
-| `gdip.ahk`           | Small drawing helper library used by `render.ahk`                          |
-| `settings-gui.ahk`   | The settings window, with live preview                                     |
-| `commonDialog.ahk`   | Windows font and color picker windows                                      |
-| `GroupBox.ahk`       | Group box control used by the settings window                              |
-| `hotkeyplus.ahk`     | Hotkey capture control used on the Hotkeys and Filters settings pages      |
-| `settings.ini`       | Your saved settings (created automatically the first time you save)        |
-| `app_icon.ico`       | Tray icon shown while the OSD is active (source version only)              |
-| `app_icon_pause.ico` | Tray icon shown while the OSD is paused (source version only)              |
+1. Go to the [Releases](https://github.com/mesutakcan/AS-Image-Viewer/releases) page.
+2. Download the appropriate executable file for your system:
+   - **`AS-Image-Viewer-x64.exe`** (for 64-bit Windows)
+   - **`AS-Image-Viewer-x32.exe`** (for 32-bit Windows)
+3. Download the [lang](https://github.com/mesutakcan/AS-Image-Viewer/tree/main/src/lang) folder and place it in the same directory as the executable.
+4. Run the executable. No installation is required.
+
+## Language Support
+
+The application supports multiple languages through INI files stored in the "lang" folder.
+Current supported languages:
+- Arabic `ar.ini`
+- Chinese `zh.ini`
+- English `en.ini`
+- French `fr.ini`
+- German `de.ini`
+- Italian `it.ini`
+- Russian `ru.ini`
+- Spanish `es.ini`
+- Turkish `tr.ini`
+
+**There may be errors in the translated texts because they are translated with artificial intelligence.**
+
+### How to add a new language:
+1. Copy the `en.ini` file in the `lang` folder as the new language file ini file (e.g. `pl.ini` for Polish)
+2. Translate and save all strings in the new INI file.
+[Language Codes](https://www.autohotkey.com/docs/v2/misc/Languages.htm)
+
+or more simply:
+Translate the contents of the `en.ini` file into the desired language and save it.\
+**Lang INI files must be in UTF-16 file format**
+
+### Language INI File Structure:
+**[Menu]** Menu item texts\
+**[File]** File related messages\
+**[Shortcuts]** Keyboard and mouse shortcut descriptions\
+**[FileInfo]** File information texts\
+**[About]** About dialog texts\
+**[Error]** Error messages
+
+## Source Code
+
+The source code for this program is available in the [src](https://github.com/mesutakcan/AS-Image-Viewer/tree/main/src) folder. To use the program source code, you'll need to have AutoHotkey v2 installed on your system. You can run the script directly using the AutoHotkey interpreter. Alternatively, you can compile the script into an executable file for easier distribution.
+
+This application uses a trimmed-down local copy of the GDI+ support library: [gdip.ahk](src/gdip.ahk). It contains only the drawing functions required by this project instead of the full [Gdip_All.ahk](https://github.com/buliasz/AHKv2-Gdip/blob/master/Gdip_All.ahk) library.
+
+## Opening Image File
+
+- **Command Line**: Launch the application with an image file path as a parameter to open it directly.
+- **Drag and Drop to Exe File**: Drag an image file onto the executable file to open it immediately.
+
+### Opening File While Running
+
+- **Menu**: Right-click to open the menu and select "Open" to browse for an image file.
+- **Keyboard Shortcut**: Press `Ctrl+O` to open the file selection dialog.
+- **Drag and Drop**: Drag image files directly onto the application window to open them.
 
 ## Usage
 
-### Download the compiled version
+1. **Right-Click Menu**: Right-click or press the `Down` arrow key to access the menu and use options
+2. **Open Image**: Select "Open" from the right-click menu or drag and drop an image onto the window
+3. **Navigation**: Navigate using keyboard shortcuts or menu
+4. **Zoom In and Out**: Use the `+` and `-` keys on the Numpad to zoom in and out
+5. Use `Numpad0` to return to original size, `Numpad1` to fit to screen
+6. **Refresh**: Press the `F5` key to refresh the image
 
-1. Open the [Releases](https://github.com/mesutakcan/Keyboard-OSD/releases) page.
-2. Download the latest `.exe` file.
-3. Run the executable.
-4. Press keys or shortcuts to see them on screen.
+## Shortcuts
 
-> **Note:** The compiled executable has all required icons built in. You can move it anywhere without worrying about missing icon files.
+### Keyboard Shortcuts
 
-### Run from source
+`Down Arrow` : Menu\
+`Home`: First Image\
+`Browser Back`: Previous image\
+`Left Arrow`: Previous image\
+`Browser Forward`: Next image\
+`Right Arrow`: Next image\
+`End`: Last Image\
+`Numpad +`: Zoom in\
+`Numpad -`: Zoom out\
+`Numpad 0`: Original size\
+`Numpad 1`: Fit to screen\
+`F1`: Image file info\
+`F2`: File properties\
+`F3`: Show file in folder\
+`F5`: Refresh\
+`Del`: Delete image\
+`Ctrl+O`: Open image file\
+`Ctrl+C`: Copy image to clipboard\
+`Ctrl+V`: Paste image from clipboard\
+`Esc`: Close file info\
+`Alt+F4`: Exit App
 
-1. Install AutoHotkey v2.
-2. Download or clone this repository.
-3. Run `keyboard-osd.ahk`.
-4. Press keys or shortcuts to see them on screen.
+### Mouse:
 
-The application runs in the system tray. Right-click the tray icon to open:
-
-- `About` - show application and author information
-- `GitHub Repository` - open the project page
-- `Settings` - edit the OSD appearance and behavior
-- `Reload` - reload the script
-- `Pause OSD` - pause or resume the OSD
-- `Hide OSD` - hide all visible OSD rows
-- `Exit` - close the application
-
-Double-clicking the tray icon opens Settings directly.
-
-You can also toggle pause or hide the OSD with the hotkeys you set on the **Hotkeys** settings page.
-
-## Settings
-
-All options can be changed from the settings window, organized into categories in the sidebar. Changes are saved to `settings.ini` and applied after you restart the script.
-
-### Layout
-
-- Auto width or fixed maximum width
-- Word wrap for typed text
-- Maximum visible lines
-- Line gap between rows
-- OSD position: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, Center
-- Margin X / Margin Y from the screen edge
-
-![](docs/settings_1.png)
-
-### Appearance
-
-- Text and background colors (Windows color picker)
-- Background transparency (alpha)
-- Font family, bold, italic (Windows font picker), with a separate font size box
-- Horizontal and vertical padding
-
-![](docs/settings_2.png)
-
-### History
-
-- History line font size (uses the same font family and weight as Appearance), with the same size box as the other pages
-- History text and background colors
-- History background transparency
-
-![](docs/settings_3.png)
-
-### Special
-
-Controls the appearance of shortcut and modifier key badges (e.g. <kbd>Ctrl+C</kbd>, <kbd>Shift</kbd>, <kbd>Escape</kbd>, <kbd>Tab</kbd>):
-
-- Font family, bold, italic (Windows font picker), with a separate font size box
-- Border color, fill color, text color
-- Badge transparency (alpha)
-- Border width
-- Text padding inside the badge
-- Text Y nudge (fine-tune vertical text position)
-- Combine multiple shortcuts pressed in a row into one badge group, with adjustable gap between them
-
-![](docs/settings_4.png)
-
-### Key Names
-
-- Give a special key or modifier a custom display label (for example, show `Escape` as `Esc` or `Ctrl` as `Control`).
-- A key's custom label also appears when that key is pressed with modifiers, such as `Ctrl+Esc`.
-- Enable or disable custom labels, and add, remove, or clear labels from the list.
-- Labels can be assigned to one special key or one modifier at a time. Typing keys and key combinations cannot be renamed.
-- Key Names settings are saved with the rest of your settings and included in profiles.
-
-![](docs/settings_5.png)
-
-### Timing
-
-- Display duration (ms) - how long the active line stays on screen
-- Dismiss delay (ms) - how long each history line stays before fading out
-- Modifier delay (ms) - how long to wait before showing a lone modifier key press
-
-![](docs/settings_6.png)
-
-### Filters
-
-- Function keys (F1-F24), Numpad, English letters, digits, arrow keys, and navigation keys
-- Other letters, by entering the characters to exclude
-- Modifiers alone or as part of a combination
-- Custom key combinations, managed with an add/remove list
-
-![](docs/settings_7.png)
-
-### Hotkeys
-
-- Set the hotkey for pausing or resuming the OSD
-- Set the hotkey for hiding all visible OSD rows
-- Click into the box and press a key combination to capture it directly - only keyboard keys are accepted, mouse buttons are not
-- Clear a hotkey to disable it - it stays disabled after saving, instead of falling back to its old value
-
-![](docs/settings_8.png)
-
-### Profiles
-
-- Save your current settings as a named profile file
-- Load a previously saved profile back into the form
-- Reset the form to the built-in defaults
-
-None of these apply until you click OK, so you can try a profile or reset the form and back out without losing your current setup.
-
-## Hiding the OSD from another application
-
-If you record your screen with a separate tool, you may want that tool to hide the OSD on its own, for example right before it starts or stops recording, without sending a fake keypress to your system.
-
-Keyboard OSD listens for a Windows message for this. Any other script or application can send message `0x5555` to the Keyboard OSD window to hide all visible rows instantly:
-
-```ahk
-PostMessage(0x5555, 0, 0, , "Keyboard OSD")
-```
-
-This hides the OSD directly at the window level, so it works even while the OSD window is click-through and out of focus.
-
-## Notes
-
-- Running from source requires AutoHotkey v2; it will not work with the older AutoHotkey v1.
-- The OSD automatically appears on whichever monitor your active window is on, and stays clear of the taskbar.
-- Row height adjusts automatically to your chosen font, so text is never cropped or oddly spaced.
-- Saving settings asks if you want to restart right away. If you choose not to, Keyboard OSD reminds you the next time you open Settings, so your saved changes are never silently left unapplied.
-- Some very old or bitmap-style fonts (for example Fixedsys) cannot be drawn by this app. Settings will warn you if the font you picked can't be used.
-- Keystroke display may vary slightly depending on your active keyboard layout.
-- The compiled `.exe` has all icons built in, so it works standalone. When running from source, keep `app_icon.ico` and `app_icon_pause.ico` in the same folder as the script.
-
-## Known Issues
-
-- **Very brief key presses can be missed.** Keyboard OSD checks key state every 16 ms, so a press and release that happen between checks may not be detected, especially when the same key is pressed rapidly several times.
-- **Some AltGr combinations may be displayed unexpectedly.** Windows reports AltGr as left Ctrl plus right Alt, which can be indistinguishable from pressing Ctrl and Alt separately. In some cases, combinations such as AltGr with Win may appear as typed text instead of a shortcut badge.
-- **Some custom label characters may appear as empty boxes.** The selected font may not contain a glyph for every Unicode character. Choose a font that supports the character; common arrows such as `→` and `←` work with Segoe UI.
-- **Row spacing can vary with font and padding settings.** A small active badge may leave extra space before the history rows, and text and badge history rows can have different heights.
-- **When running from source, some windows may show the default AutoHotkey icon.** The compiled executable is not affected.
+**Right click**: Menu\
+**Mouse wheel up**: Zoom in\
+**Mouse wheel down**: Zoom out\
+**4th mouse button**: Previous image\
+**5th mouse button**: Next image\
+**Left button double click**: Original size\
+**Middle button double click**: Fit to screen
 
 ## History
 
-### Version 1.9 (2026-09-29)
+### v1.0: 30/07/2024
+- First version
 
-- Added **Key Names**, letting you assign custom display labels to special keys and modifiers. A renamed key keeps its label in shortcuts, and the settings are saved in profiles.
-- Added a font size box next to the font picker on the Appearance and Special pages, so you no longer need to open the Windows font dialog just to change the size. The History page now uses the same box.
-- Double-clicking the tray icon now opens Settings directly.
-- Clearing a hotkey and saving now actually disables it, instead of quietly bringing back the old value.
-- Shortcut and modifier badges now keep their own size and padding instead of stretching to match the active text line, so small badge settings no longer get inflated to the plain-text row height.
+### v1.1: 11/08/2024
+- Code improvements
+- Added new shortcuts for navigation
+- Improved zoom features
 
-**Fixes:**
+### v1.2: 18/08/2024
+- Code improvements
 
-- Fixed <kbd>AltGr</kbd> combinations dropping <kbd>Shift</kbd> or <kbd>Win</kbd> from the badge - AltGr+Shift+key and AltGr+Win+key now show the full combination.
-- Fixed history badges sometimes appearing larger than the active badge when History and Special used very different font sizes.
-- Fixed the active row occasionally jumping upward after pressing <kbd>Enter</kbd> and then holding a modifier key.
-- Fixed a small gap on the right side of typed text that didn't match the gap on the left.
-- Fixed the OSD appearing in the wrong spot on setups where a second monitor sits to the left of or above the main one.
+### v1.3: 25/03/2025
+- Code improvements
+- Added command line support for opening images
+- Added drag and drop support
 
----
+### v1.3.1: 09/04/2025
+- Minor issues fixed
 
-### Version 1.8 (2026-09-13)
+### v1.4.0: 19/04/2025
+- Added language support (English, Turkish, Russian, Chinese, French, German, Italian)
 
-- Rows are now drawn as images instead of native text controls, removing the small flicker that could happen while typing quickly.
-- Multiple shortcuts pressed one after another can combine into a single badge row (e.g. <kbd>Ctrl</kbd> then <kbd>PgDn</kbd> shown together), with an option to turn this off and a gap size you can adjust.
-- Pressing <kbd>Enter</kbd> while typing now sends the line to history immediately, instead of waiting for the display timer to run out.
-- Added **Save Profile** and **Load Profile** to the settings window, so you can keep more than one setup and switch between them.
-- Added **Reset to Defaults**, which resets the settings form without touching your saved file until you click OK.
-- Saving settings now asks whether to restart immediately or later; if you pick later, Keyboard OSD reminds you the next time Settings is opened.
-- History lines now always follow the Appearance font family and weight, only the size is set separately. This removes a font mismatch that could happen when only one of the two was changed.
-- Removed the rounded-corners on/off setting - every row now always has rounded corners.
-- Removed the Text Y Nudge option from Appearance and History; padding alone now positions the text correctly. It's still available under Special for fine-tuning shortcut badges.
-- Default pause and hide hotkeys changed to <kbd>Ctrl+Shift+F12</kbd> and <kbd>Ctrl+Shift+F9</kbd>.
-- Settings window warns you up front if a chosen font can't be drawn, instead of showing blank text later.
+### v1.5: 22/05/2025
+- Copy image to clipboard
 
-**Fixes:**
+### v1.6: 14/06/2025
+- Code improvements
+- Language support optimization
+- Spanish language support added
+- Added keyboard shortcuts to context menu
 
-- Fixed a saved setting occasionally resetting the OSD position back to its default after reopening the app.
-- Fixed a modifier key badge (e.g. <kbd>Ctrl</kbd>) sometimes staying on screen longer than it should when typing started right after it.
+### v1.7: 26/05/2026
+- Added paste image from clipboard
+- Added delete image feature
+- Added save settings (window position, center image, etc.)
+- Added icons to right-click menu
+- Improved memory handling when loading files
 
----
+### v1.8: 05/08/2026
+- Added Language submenu to right-click menu (users can switch language at runtime)
+- Language preference is saved and restored on next launch
+- Automatic language detection based on the system language
 
-### Version 1.7 (2026-09-04)
+### v1.9: 01/10/2026
+- Arabic language support added
+- Redesigned the internal application state and UI organization
+- Added custom minimize and close buttons to the frameless window
+- Improved rendering using a cached image buffer
+- Improved image loading and resource cleanup
+- Fixed images disappearing after moving the window off-screen and bringing it back
+- Added more granular zoom levels, including up to 5000%
+- Sorted available language choices alphabetically
+- Added GitHub repository access from the menu
 
-- Hotkeys and custom key combinations are now captured with a dedicated control instead of the built-in Windows hotkey box, with a clearer display and a button to clear the current value.
-- Only keyboard keys can be assigned as hotkeys or exclusion combinations - mouse buttons are no longer accepted, to keep behavior focused on keyboard input.
+## Credits
 
----
-
-### Version 1.6 (2026-08-26)
-
-- Added a **Filters** settings page for excluding key categories, individual characters, modifiers, and custom key combinations.
-- Added a **Hotkeys** settings page for configuring the pause/resume and hide-OSD shortcuts.
-- Added a **Hide OSD** tray command and hotkey to instantly hide all visible rows.
-- Added an option to keep shortcut and modifier badge styling when lines move into history.
-- Settings window navigation redesigned: a category list on the left replaces the old tabs.
-
-**Fixes:**
-
-- Fixed occasional flickering while typing.
-
----
-
-### Version 1.5 (2026-07-15)
-
-- The Windows (<kbd>Win</kbd>) key can now be shown on its own as a badge, just like <kbd>Ctrl</kbd>, <kbd>Shift</kbd>, and <kbd>Alt</kbd>.
-- Improved AltGr and <kbd>Shift</kbd> handling: when a key combination produces a character, that character now appears in the typed text as expected. When it doesn't produce a character, the badge shows the key combination itself (e.g. AltGr + K).
-- Holding down multiple modifier keys in sequence now updates the badge smoothly to show the full combination, instead of showing a separate badge for each stage.
-
-**Fixes:**
-
-- A lone modifier badge (e.g. just <kbd>Shift</kbd>) no longer lingers on screen after you start typing.
-
----
-
-### Version 1.4 (2026-07-11)
-
-- Shortcut and modifier key presses now appear as styled badges with a rounded border, fill color, and their own transparency, making them instantly stand out from regular typed text.
-- Added a new **Special** tab in the settings window to customize badge colors, border, padding, and text position, with a live preview.
-- Smoother performance when pressing shortcuts frequently.
-
----
-
-### Version 1.3 (2026-07-02)
-
-- Active line and history lines now disappear independently, each on its own timer, for more natural timing.
-- Row fade-outs are smoother and no longer interrupt typing while they play.
-- Typed text is now automatically finalized after a short pause, instead of waiting indefinitely.
-- Row height is now calculated automatically from your chosen font, so text always fits cleanly.
-- Added a pause/resume keyboard shortcut: <kbd>Ctrl+Shift+F8</kbd>.
-- Settings window redesigned with a cleaner tabbed layout.
-- Added fine-grained padding controls for each row (left/right, top, bottom).
-
-**Fixes:**
-
-- Fade animations no longer cause typing to lag or stutter.
-
----
-
-### Version 1.2 (2026-06-28)
-
-- OSD windows now fade out smoothly when dismissed instead of disappearing instantly.
-
----
-
-### Version 1.1 (2026-06-26)
-
-- Icons are now embedded directly into the compiled executable.
-- Improved portability - the `.exe` file now works standalone without requiring external icon files.
-
-**Fixes:**
-
-- Fixed tray icon not displaying correctly in compiled executable.
-- Fixed pause icon switching when script is paused.
-
----
-
-### Version 1.0 (2026-06-24)
-
-- Initial release.
-- Real-time keyboard input display.
-- Support for shortcuts and modifier keys.
-- Customizable appearance and behavior.
-- Settings window with live preview.
+AS Image Viewer builds on open-source work from:
+- [AHKv2-Gdip](https://github.com/buliasz/AHKv2-Gdip) by buliasz - this project uses a reduced, project-specific [gdip.ahk](src/gdip.ahk) version containing only the drawing functions required by AS Image Viewer.
 
 ## License
 
@@ -339,19 +219,10 @@ This project is licensed under the GPL 3.0 License. For more information, see th
 
 Contributions are welcome! If you'd like to add features, fix bugs, or improve the code, feel free to open a pull request.
 
-## Credits
-
-Keyboard OSD builds on a few other open-source projects:
-
-- [CommonDialog](https://github.com/mesutakcan/CommonDialog-ahk) by Mesut Akcan - wraps the Windows font and color picker dialogs used in the settings window.
-- [GroupBox](https://github.com/mesutakcan/GroupBox) by Mesut Akcan - the container control used to group settings on each page.
-- [HotkeyPlus](https://github.com/mesutakcan/hotkeyplus-ahk) by Mesut Akcan - the hotkey capture control used on the Hotkeys and Filters pages.
-- [AHKv2-Gdip](https://github.com/buliasz/AHKv2-Gdip) by buliasz - `gdip.ahk` is a trimmed-down copy of this library, keeping only the drawing functions Keyboard OSD needs.
-
 ## Contact
 
 **Author**: Mesut Akcan\
 **Email**: <makcan@gmail.com>\
 **Blog**: [mesutakcan.blogspot.com](http://mesutakcan.blogspot.com)\
-**YouTube**: [youtube.com/mesutakcan](http://youtube.com/mesutakcan)\
-**GitHub**: [mesutakcan](http://github.com/mesutakcan)
+**GitHub**: [mesutakcan](http://github.com/mesutakcan)\
+**YouTube**: [Mesut Akcan](http://youtube.com/mesutakcan)
